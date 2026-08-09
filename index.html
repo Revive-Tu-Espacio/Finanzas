@@ -264,6 +264,84 @@ textarea.entrada{padding:var(--s-3);min-height:72px;resize:vertical}
 }
 .fab:hover{background:#374A2D}
 
+/* ---------- Panel lateral ---------- */
+.panel-velo{
+  position:fixed;inset:0;background:rgba(35,48,28,.42);
+  z-index:var(--z-hoja);opacity:0;transition:opacity 180ms ease-out;
+}
+.panel-velo.abierto{opacity:1}
+.panel-velo[hidden]{display:none}
+.panel{
+  position:fixed;top:0;right:0;height:100dvh;width:min(440px,100%);
+  background:var(--superficie);box-shadow:-8px 0 32px rgba(35,48,28,.18);
+  z-index:var(--z-hoja);display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform 220ms ease-out;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.panel.abierto{transform:translateX(0)}
+.panel[hidden]{display:none}
+.panel__cab{
+  display:flex;align-items:center;gap:var(--s-3);flex:none;
+  padding:var(--s-4) var(--s-5);border-bottom:1px solid var(--linea);
+  padding-top:calc(var(--s-4) + env(safe-area-inset-top));
+}
+.panel__cab h2{flex:1;font-size:17px;font-weight:600;min-width:0}
+.panel__cuerpo{flex:1;overflow-y:auto;padding:var(--s-5)}
+@media (prefers-reduced-motion:reduce){
+  .panel,.panel-velo{transition:none}
+}
+
+/* ---------- Buscador y filtros de movimientos ---------- */
+.buscador{position:relative;margin-bottom:var(--s-3)}
+.buscador input{
+  width:100%;min-height:48px;padding:0 44px 0 42px;
+  border:1px solid var(--linea);border-radius:var(--r-full);
+  background:var(--superficie);font-size:16px;
+}
+.buscador__lupa{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--tinta-suave);pointer-events:none}
+.buscador__limpiar{
+  position:absolute;right:4px;top:50%;transform:translateY(-50%);
+  width:40px;height:40px;display:grid;place-items:center;
+  background:transparent;border:none;border-radius:var(--r-full);color:var(--tinta-suave);
+}
+.buscador__limpiar:hover{background:var(--verde-claro);color:var(--verde-bosque)}
+
+.chips{display:flex;gap:var(--s-2);overflow-x:auto;padding:2px 0 var(--s-3);scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{
+  flex:none;min-height:38px;padding:0 var(--s-3);border-radius:var(--r-full);
+  border:1px solid var(--linea);background:var(--superficie);
+  font-size:14px;white-space:nowrap;color:var(--tinta-suave);
+}
+.chip[aria-pressed="true"]{background:var(--verde-bosque);border-color:var(--verde-bosque);color:#fff}
+.chip__n{opacity:.7;margin-left:5px;font-variant-numeric:tabular-nums}
+
+.resultado{
+  display:flex;justify-content:space-between;align-items:baseline;gap:var(--s-3);
+  font-size:13px;color:var(--tinta-suave);padding:0 var(--s-1) var(--s-3);
+}
+.resultado strong{color:var(--tinta);font-variant-numeric:tabular-nums}
+
+.dia-cab{
+  display:flex;justify-content:space-between;align-items:baseline;gap:var(--s-3);
+  margin:var(--s-5) 0 var(--s-1);
+}
+.dia-cab:first-child{margin-top:0}
+.dia-cab__fecha{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-suave)}
+.dia-cab__neto{font-size:12px;color:var(--tinta-suave);font-variant-numeric:tabular-nums}
+
+.reg__abrir{
+  flex:1;min-width:0;display:flex;align-items:center;gap:var(--s-3);
+  background:transparent;border:none;padding:var(--s-2) 0;text-align:left;border-radius:var(--r-sm);
+}
+.reg__abrir:hover{background:var(--papel)}
+.reg__icono{
+  flex:none;width:38px;height:38px;border-radius:var(--r-full);
+  display:grid;place-items:center;background:var(--verde-claro);color:var(--verde-bosque);
+}
+.reg__icono.ingreso{background:var(--verde-bosque);color:#fff}
+.pastilla--amb{margin-left:6px;font-size:11px;padding:1px 7px}
+
 /* ---------- Campana de alertas ---------- */
 .btn-campana{position:relative}
 .campana__num{
@@ -512,6 +590,17 @@ button,.ficha,.btn,label[for],.nav__btn,.reg__borrar{
 <div class="velo" id="velo" hidden>
   <div class="hoja-modal" role="dialog" aria-modal="true" aria-labelledby="hoja-titulo" id="hoja-modal"></div>
 </div>
+
+<div class="panel-velo" id="panel-velo" hidden></div>
+<aside class="panel" id="panel" role="dialog" aria-modal="true" aria-labelledby="panel-titulo" hidden>
+  <div class="panel__cab">
+    <h2 id="panel-titulo"></h2>
+    <button class="btn-cerrar" type="button" id="panel-cerrar" aria-label="Cerrar panel">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <div class="panel__cuerpo" id="panel-cuerpo"></div>
+</aside>
 
 <div class="aviso-flotante" id="aviso" role="status" aria-live="polite" hidden></div>
 
@@ -1047,7 +1136,10 @@ const ICONO = {
   cerrar:  '<path d="M6 6l12 12M18 6L6 18"/>',
   bote:    '<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>',
   cobrar:  '<path d="M3 8h18v10H3z"/><circle cx="12" cy="13" r="2.5"/><path d="M7 5h10"/>',
-  importar:'<path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 17v3h16v-3"/>'
+  importar:'<path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 17v3h16v-3"/>',
+  lupa:    '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+  entra:   '<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>',
+  sale:    '<path d="M12 5v14"/><path d="M6 13l6 6 6-6"/>'
 };
 
 /**
@@ -1356,6 +1448,7 @@ function pintar() {
   pintarPie();
   pintarCampana();
   pintarAmbito();
+  if (vistaActual === "movimientos") pintarListaMovs();
 }
 
 function pintarPie() {
@@ -1543,54 +1636,299 @@ function vistaResumen() {
   return html;
 }
 
+
+/* ----------------------------------------------------------------
+   PANEL LATERAL
+   Entra desde la derecha en 220 ms con easing de salida. Se usa para
+   el detalle de un movimiento: mantiene visible el contexto de la
+   lista detrás, cosa que una hoja a pantalla completa pierde.
+   ---------------------------------------------------------------- */
+
+let focoPrevioPanel = null;
+
+/**
+ * Abre el panel lateral.
+ * @param {string} titulo texto del encabezado
+ * @param {string} cuerpo HTML del contenido
+ * @param {function(HTMLElement):void} [alMontar] recibe el contenedor ya pintado
+ */
+function abrirPanel(titulo, cuerpo, alMontar) {
+  focoPrevioPanel = document.activeElement;
+  const velo = document.getElementById("panel-velo");
+  const panel = document.getElementById("panel");
+  const caja = document.getElementById("panel-cuerpo");
+  document.getElementById("panel-titulo").textContent = titulo;
+  caja.innerHTML = cuerpo;
+  velo.hidden = false; panel.hidden = false;
+  document.body.style.overflow = "hidden";
+  // Un cuadro de margen para que el navegador registre el estado inicial
+  // antes de animar; sin esto el panel aparece de golpe.
+  requestAnimationFrame(() => {
+    velo.classList.add("abierto");
+    panel.classList.add("abierto");
+  });
+  if (alMontar) alMontar(caja);
+  const primero = caja.querySelector("input:not([type=hidden]), select, textarea, button");
+  (primero || document.getElementById("panel-cerrar")).focus();
+}
+
+function cerrarPanel() {
+  const velo = document.getElementById("panel-velo");
+  const panel = document.getElementById("panel");
+  velo.classList.remove("abierto");
+  panel.classList.remove("abierto");
+  document.body.style.overflow = "";
+  const ocultar = () => { velo.hidden = true; panel.hidden = true; document.getElementById("panel-cuerpo").innerHTML = ""; };
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) ocultar();
+  else setTimeout(ocultar, 220);
+  if (focoPrevioPanel && focoPrevioPanel.isConnected) focoPrevioPanel.focus();
+}
+
+/** Escape y ciclo de foco dentro del panel. */
+document.addEventListener("keydown", e => {
+  const panel = document.getElementById("panel");
+  if (!panel || panel.hidden) return;
+  if (e.key === "Escape") { cerrarPanel(); return; }
+  if (e.key !== "Tab") return;
+  const foco = panel.querySelectorAll("button, input:not([type=hidden]), select, textarea, [href]");
+  if (!foco.length) return;
+  const primero = foco[0], ultimo = foco[foco.length - 1];
+  if (e.shiftKey && document.activeElement === primero) { e.preventDefault(); ultimo.focus(); }
+  else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primero.focus(); }
+});
+
+/* ----------------------------------------------------------------
+   FILTRADO DE MOVIMIENTOS
+   ---------------------------------------------------------------- */
+
+/** Estado del buscador. Vive fuera de datos: no tiene por qué persistir. */
+const FILTRO = { texto: "", tipo: "todos", cats: [], limite: 40 };
+
+/**
+ * Aplica buscador y filtros sobre los movimientos de la ventana visible.
+ * @returns {Array} ordenados del más reciente al más antiguo
+ */
+function movsFiltrados() {
+  let m = movimientosDe(desfase);
+  if (FILTRO.tipo !== "todos") m = m.filter(x => x.tipo === FILTRO.tipo);
+  if (FILTRO.cats.length) m = m.filter(x => FILTRO.cats.includes(x.categoria));
+  const q = normalizar(FILTRO.texto);
+  if (q) {
+    m = m.filter(x =>
+      normalizar(x.nota).includes(q) ||
+      normalizar(nombreCategoria(x.categoria)).includes(q) ||
+      normalizar(x.metodo).includes(q) ||
+      String(x.monto).includes(q));
+  }
+  return m.slice().sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.creado || 0) - (a.creado || 0));
+}
+
+/** Categorías presentes en la ventana, con su conteo, para las fichas. */
+function catsPresentes() {
+  const base = movimientosDe(desfase);
+  const cuenta = {};
+  base.forEach(m => { cuenta[m.categoria] = (cuenta[m.categoria] || 0) + 1; });
+  return Object.entries(cuenta)
+    .map(([id, n]) => ({ id, n, nombre: nombreCategoria(id) }))
+    .sort((a, b) => b.n - a.n);
+}
+
+/** Pinta solo la lista, sin volver a montar la vista: conserva el foco del buscador. */
+function pintarListaMovs() {
+  const cont = document.getElementById("lista-movs");
+  if (!cont) return;
+  const movs = movsFiltrados();
+  const visibles = movs.slice(0, FILTRO.limite);
+
+  const res = document.getElementById("resultado-movs");
+  if (res) {
+    const ing = movs.filter(m => m.tipo === "ingreso").reduce((s, m) => s + m.monto, 0);
+    const gas = movs.filter(m => m.tipo === "gasto").reduce((s, m) => s + m.monto, 0);
+    res.innerHTML = "<span>" + movs.length + (movs.length === 1 ? " movimiento" : " movimientos") + "</span>" +
+      "<span>Entró <strong>" + fmt(ing, true) + "</strong> · Salió <strong>" + fmt(gas, true) + "</strong></span>";
+  }
+
+  if (!movs.length) {
+    const hayFiltro = FILTRO.texto || FILTRO.tipo !== "todos" || FILTRO.cats.length;
+    cont.innerHTML = '<div class="vacio"><div class="vacio__hoja">' + svg("hoja", 36) + "</div>" +
+      '<p class="vacio__titulo">' + (hayFiltro ? "Nada coincide con tu búsqueda" : "Sin movimientos en este periodo") + "</p>" +
+      '<p class="vacio__texto">' + (hayFiltro
+        ? "Prueba con otra palabra o quita los filtros."
+        : "Anota cada gasto en el momento. Toma diez segundos y es lo que hace que todo lo demás funcione.") + "</p>" +
+      (hayFiltro
+        ? '<button class="btn btn--fantasma" type="button" id="limpiar-filtros">Quitar filtros</button>'
+        : '<button class="btn" type="button" data-abrir="movimiento">Registrar el primero</button>') +
+      "</div>";
+    return;
+  }
+
+  let html = "", dia = null;
+  visibles.forEach(m => {
+    if (m.fecha !== dia) {
+      dia = m.fecha;
+      const delDia = visibles.filter(x => x.fecha === dia);
+      const neto = delDia.reduce((s, x) => s + (x.tipo === "ingreso" ? x.monto : -x.monto), 0);
+      html += '<div class="dia-cab"><span class="dia-cab__fecha">' +
+        esc(FMT_LARGO.format(aFecha(dia))) + "</span>" +
+        '<span class="dia-cab__neto">' + (neto >= 0 ? "+" : "−") + fmt(Math.abs(neto), true) + "</span></div>";
+    }
+    const esIngreso = m.tipo === "ingreso";
+    html += '<div class="reg">' +
+      '<button class="reg__abrir" type="button" data-mov="' + m.id + '">' +
+        '<span class="reg__icono' + (esIngreso ? " ingreso" : "") + '">' +
+          svg(esIngreso ? "entra" : "sale", 17) + "</span>" +
+        '<span class="reg__cuerpo">' +
+          '<span class="reg__nombre">' + esc(m.nota || nombreCategoria(m.categoria)) + "</span>" +
+          '<span class="reg__meta">' + esc(nombreCategoria(m.categoria)) +
+            (m.metodo ? " · " + esc(m.metodo) : "") +
+            (usaAmbitos() && m.ambito === "negocio" ? '<span class="pastilla pastilla--amb">Negocio</span>' : "") +
+          "</span>" +
+        "</span>" +
+        '<span class="reg__monto num ' + (esIngreso ? "ingreso" : "gasto") + '">' +
+          (esIngreso ? "+" : "−") + fmt(m.monto) + "</span>" +
+      "</button></div>";
+  });
+
+  if (movs.length > visibles.length) {
+    html += '<button class="btn btn--fantasma btn--bloque" type="button" id="ver-mas" ' +
+      'style="margin-top:var(--s-4)">Ver ' + Math.min(40, movs.length - visibles.length) +
+      " más de " + (movs.length - visibles.length) + "</button>";
+  }
+  cont.innerHTML = html;
+}
+
 /* ---------- Movimientos ---------- */
 
 function vistaMovimientos() {
-  const p = datos.perfil;
-  const movs = movimientosDe(desfase).slice().sort((a, b) => b.fecha.localeCompare(a.fecha) || b.creado - a.creado);
   const maxDesfase = topeDesfase();
   const rot = rotuloVista(desfase);
+  const cats = catsPresentes();
 
-  let html =
-    "<h1 class=\"sr-only\">Movimientos del periodo</h1>" +
+  return '<h1 class="sr-only">Movimientos del periodo</h1>' +
     barraVistaPeriodo() +
     '<div class="periodo">' +
       '<button type="button" data-periodo="-1" aria-label="Periodo anterior">' + svg("atras") + "</button>" +
       '<div class="periodo__etiqueta"><strong>Movimientos</strong>' + rot.rango + "</div>" +
       '<button type="button" data-periodo="1" aria-label="Periodo siguiente"' +
         (desfase >= maxDesfase ? " disabled" : "") + ">" + svg("adelante") + "</button>" +
-    "</div><div class=\"tarjeta\">";
+    "</div>" +
 
-  if (!movs.length) {
-    html += '<div class="vacio"><div class="vacio__hoja">' + svg("hoja", 36) + "</div>" +
-      '<p class="vacio__titulo">Sin movimientos en este periodo</p>' +
-      '<p class="vacio__texto">Anota cada gasto en el momento. Toma diez segundos y es lo que hace que todo lo demás funcione.</p>' +
-      '<button class="btn" type="button" data-abrir="movimiento">Registrar el primero</button></div></div>' +
-      avisoOtrosPeriodos();
-    return html;
-  }
+    '<div class="buscador">' +
+      '<span class="buscador__lupa">' + svg("lupa", 18) + "</span>" +
+      '<label class="sr-only" for="busca-mov">Buscar movimientos</label>' +
+      '<input id="busca-mov" type="search" inputmode="search" autocomplete="off" ' +
+        'placeholder="Buscar concepto, categoría o monto" value="' + esc(FILTRO.texto) + '">' +
+      (FILTRO.texto
+        ? '<button class="buscador__limpiar" type="button" id="limpia-busca" aria-label="Limpiar búsqueda">' +
+          svg("cerrar", 18) + "</button>"
+        : "") +
+    "</div>" +
 
-  let diaPrevio = null;
-  html += '<ul class="lista">';
-  for (const m of movs) {
-    if (m.fecha !== diaPrevio) {
-      diaPrevio = m.fecha;
-      html += '<li class="dia-rotulo">' + esc(FMT_LARGO.format(aFecha(m.fecha))) + "</li>";
-    }
-    const esIngreso = m.tipo === "ingreso";
-    html += '<li class="reg">' +
-      '<div class="reg__cuerpo">' +
-        '<div class="reg__nombre">' + esc(nombreCategoria(m.categoria)) + "</div>" +
-        '<div class="reg__meta">' + esc(m.metodo || "Efectivo") + (m.nota ? " · " + esc(m.nota) : "") + "</div>" +
+    '<div class="segmentos" role="group" aria-label="Tipo" style="margin-bottom:var(--s-3)">' +
+      [["todos", "Todos"], ["ingreso", "Entró"], ["gasto", "Salió"]].map(([k, t]) =>
+        '<button type="button" data-ftipo="' + k + '" aria-pressed="' + (FILTRO.tipo === k) + '">' +
+        t + "</button>").join("") + "</div>" +
+
+    (cats.length > 1
+      ? '<div class="chips" role="group" aria-label="Filtrar por categoría">' +
+        cats.map(c => '<button type="button" class="chip" data-fcat="' + c.id + '" aria-pressed="' +
+          FILTRO.cats.includes(c.id) + '">' + esc(c.nombre) +
+          '<span class="chip__n">' + c.n + "</span></button>").join("") + "</div>"
+      : "") +
+
+    '<div class="resultado" id="resultado-movs" aria-live="polite"></div>' +
+    '<div class="tarjeta"><div id="lista-movs"></div></div>' +
+    avisoOtrosPeriodos();
+}
+
+/**
+ * Panel de detalle y edición de un movimiento.
+ * Hasta ahora solo se podía borrar; editar obligaba a borrar y recapturar.
+ * @param {string} movId
+ */
+function panelMovimiento(movId) {
+  const m = datos.movimientos.find(x => x.id === movId);
+  if (!m) return;
+  const cats = categoriasDe(m.tipo, m.ambito || "personal");
+  const esIngreso = m.tipo === "ingreso";
+
+  const cuerpo =
+    '<div style="text-align:center;padding:0 0 var(--s-5)">' +
+      '<div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-suave)">' +
+        (esIngreso ? "Entró" : "Salió") + "</div>" +
+      '<div class="num" style="font-size:38px;font-weight:600;margin-top:6px;color:' +
+        (esIngreso ? "var(--verde-bosque)" : "var(--tinta)") + '">' + fmt(m.monto) + "</div>" +
+    "</div>" +
+    '<form id="form-editar" novalidate>' +
+      '<div class="campo"><label for="ed-monto">Monto</label>' +
+        '<input class="entrada" id="ed-monto" type="number" inputmode="decimal" min="0.01" step="0.01" value="' + m.monto + '"></div>' +
+      '<div class="campo"><label for="ed-cat">Categoría</label>' +
+        '<select class="entrada" id="ed-cat">' +
+          cats.map(c => '<option value="' + c.id + '"' + (c.id === m.categoria ? " selected" : "") + ">" +
+            esc(c.nombre) + "</option>").join("") +
+          (cats.some(c => c.id === m.categoria) ? "" :
+            '<option value="' + esc(m.categoria) + '" selected>' + esc(nombreCategoria(m.categoria)) + "</option>") +
+        "</select></div>" +
+      '<div class="rejilla-2">' +
+        '<div class="campo"><label for="ed-fecha">Fecha</label>' +
+          '<input class="entrada" id="ed-fecha" type="date" value="' + m.fecha + '" max="' + aISO(hoy()) + '"></div>' +
+        '<div class="campo"><label for="ed-metodo">Forma de pago</label>' +
+          '<select class="entrada" id="ed-metodo">' +
+            METODOS.map(x => '<option' + (x === m.metodo ? " selected" : "") + ">" + x + "</option>").join("") +
+          "</select></div>" +
       "</div>" +
-      '<span class="reg__monto num ' + (esIngreso ? "ingreso" : "gasto") + '">' +
-        (esIngreso ? "+" : "−") + fmt(m.monto) + "</span>" +
-      '<button class="reg__borrar" type="button" data-borrar-mov="' + m.id + '" ' +
-        'aria-label="Borrar movimiento de ' + fmt(m.monto) + '">' + svg("bote", 18) + "</button>" +
-    "</li>";
-  }
-  html += "</ul></div>";
-  return html;
+      '<div class="campo"><label for="ed-nota">Concepto</label>' +
+        '<input class="entrada" id="ed-nota" type="text" maxlength="60" value="' + esc(m.nota || "") + '"></div>' +
+      (usaAmbitos()
+        ? '<div class="campo"><label>Ámbito</label><div class="segmentos" role="group" aria-label="Ámbito">' +
+          '<button type="button" data-edamb="personal" aria-pressed="' + ((m.ambito || "personal") === "personal") + '">Personal</button>' +
+          '<button type="button" data-edamb="negocio" aria-pressed="' + (m.ambito === "negocio") + '">Negocio</button></div></div>'
+        : "") +
+      '<button class="btn btn--bloque" type="submit">Guardar cambios</button>' +
+      '<button class="btn btn--peligro btn--bloque" type="button" id="ed-borrar" style="margin-top:var(--s-3)">Borrar movimiento</button>' +
+    "</form>";
+
+  abrirPanel(esIngreso ? "Ingreso" : "Gasto", cuerpo, caja => {
+    let amb = m.ambito || "personal";
+    caja.addEventListener("click", e => {
+      const b = e.target.closest("[data-edamb]");
+      if (!b) return;
+      amb = b.dataset.edamb;
+      caja.querySelectorAll("[data-edamb]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+      // El catálogo cambia con el ámbito: se repuebla conservando lo elegido.
+      const sel = caja.querySelector("#ed-cat"), previo = sel.value;
+      const lista = categoriasDe(m.tipo, amb);
+      sel.innerHTML = lista.map(c => '<option value="' + c.id + '"' +
+        (c.id === previo ? " selected" : "") + ">" + esc(c.nombre) + "</option>").join("");
+    });
+
+    caja.querySelector("#ed-borrar").addEventListener("click", () => {
+      cerrarPanel();
+      confirmar("Borrar movimiento",
+        "Se eliminará el registro de " + fmt(m.monto) + " en " + nombreCategoria(m.categoria) + ". No se puede deshacer.",
+        "Sí, borrar",
+        async () => {
+          datos.movimientos = datos.movimientos.filter(x => x.id !== m.id);
+          await persistir(); avisar("Movimiento borrado");
+        });
+    });
+
+    caja.querySelector("#form-editar").addEventListener("submit", async e => {
+      e.preventDefault();
+      const monto = parseFloat(caja.querySelector("#ed-monto").value);
+      if (!Number.isFinite(monto) || monto <= 0) { caja.querySelector("#ed-monto").focus(); return; }
+      m.monto = Math.round(monto * 100) / 100;
+      m.categoria = caja.querySelector("#ed-cat").value;
+      m.fecha = caja.querySelector("#ed-fecha").value || m.fecha;
+      m.metodo = caja.querySelector("#ed-metodo").value;
+      m.nota = caja.querySelector("#ed-nota").value.trim();
+      m.ambito = amb;
+      await persistir();
+      cerrarPanel();
+      avisar("Cambios guardados");
+      pintar();
+    });
+  });
 }
 
 /* ---------- Bolsas (presupuesto) ---------- */
@@ -3679,8 +4017,10 @@ function repartirFechas(cuantos, mesISO) {
 
 /** Clave de deduplicación: mismo ámbito, tipo, fecha, monto y concepto. */
 function claveMovimiento(m) {
+  // Se normaliza el concepto: "Café" y "Cafe" son el mismo gasto y sin
+  // esto se importaban dos veces.
   return [(m.ambito || "personal"), m.tipo, m.fecha, m.monto.toFixed(2),
-          String(m.nota || "").trim().toLowerCase()].join("|");
+          normalizar(m.nota).replace(/[^a-z0-9]+/g, " ").trim()].join("|");
 }
 
 /* ---------------------------------------------------------------
@@ -4193,7 +4533,7 @@ document.addEventListener("click", async e => {
   if (per) {
     const max = topeDesfase();
     const siguiente = desfase + Number(per.dataset.periodo);
-    if (siguiente <= max) { desfase = siguiente; pintar(); }
+    if (siguiente <= max) { desfase = siguiente; FILTRO.limite = 40; FILTRO.cats = []; pintar(); }
     return;
   }
 
@@ -4257,6 +4597,41 @@ document.addEventListener("click", async e => {
         await persistir(); avisar("Deuda eliminada");
       });
     return;
+  }
+
+  // --- panel lateral ---
+  if (t.closest("#panel-cerrar") || t === document.getElementById("panel-velo")) { cerrarPanel(); return; }
+  const abrirMov = t.closest("[data-mov]");
+  if (abrirMov) { panelMovimiento(abrirMov.dataset.mov); return; }
+
+  // --- buscador y filtros ---
+  if (t.closest("#limpia-busca")) {
+    FILTRO.texto = ""; FILTRO.limite = 40; pintar();
+    const c = document.getElementById("busca-mov"); if (c) c.focus();
+    return;
+  }
+  if (t.closest("#limpiar-filtros")) {
+    FILTRO.texto = ""; FILTRO.tipo = "todos"; FILTRO.cats = []; FILTRO.limite = 40;
+    pintar(); return;
+  }
+  if (t.closest("#ver-mas")) { FILTRO.limite += 40; pintarListaMovs(); return; }
+
+  const ft = t.closest("[data-ftipo]");
+  if (ft) {
+    FILTRO.tipo = ft.dataset.ftipo; FILTRO.limite = 40;
+    document.querySelectorAll("[data-ftipo]").forEach(b =>
+      b.setAttribute("aria-pressed", String(b === ft)));
+    pintarListaMovs(); return;
+  }
+
+  const fc = t.closest("[data-fcat]");
+  if (fc) {
+    const id = fc.dataset.fcat;
+    const i = FILTRO.cats.indexOf(id);
+    if (i >= 0) FILTRO.cats.splice(i, 1); else FILTRO.cats.push(id);
+    fc.setAttribute("aria-pressed", String(FILTRO.cats.includes(id)));
+    FILTRO.limite = 40;
+    pintarListaMovs(); return;
   }
 
   if (t.closest("#campana")) { hojaAlertas(); return; }
@@ -4354,6 +4729,21 @@ document.addEventListener("submit", async e => {
     avisar("Cambios guardados");
     pintar();
   }
+});
+
+let temporizadorBusqueda = null;
+document.addEventListener("input", e => {
+  if (e.target.id !== "busca-mov") return;
+  FILTRO.texto = e.target.value;
+  FILTRO.limite = 40;
+  // Pequeño retardo para no recalcular en cada tecla en listas largas.
+  clearTimeout(temporizadorBusqueda);
+  temporizadorBusqueda = setTimeout(() => {
+    pintarListaMovs();
+    const limpiar = document.getElementById("limpia-busca");
+    if (FILTRO.texto && !limpiar) pintar(), document.getElementById("busca-mov").focus();
+    else if (!FILTRO.texto && limpiar) pintar(), document.getElementById("busca-mov").focus();
+  }, 140);
 });
 
 document.addEventListener("change", e => {
