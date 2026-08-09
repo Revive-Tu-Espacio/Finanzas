@@ -3379,16 +3379,23 @@ const IMP = {
   destino: "gasto", mes: "", mapaCats: {}, ambitoFijo: "personal", listos: []
 };
 
-function hojaImportar() {
-  // Reinicio obligatorio: sin esto, una segunda importación heredaría el
-  // mapeo y el destino de la anterior, y podría escribir en el lugar
+/**
+ * Abre el asistente.
+ * @param {boolean} [conservarArchivo=false] mantiene la hoja ya cargada
+ *   para importar otro bloque del mismo archivo sin volver a subirlo
+ */
+function hojaImportar(conservarArchivo) {
+  // Reinicio obligatorio del mapeo: sin esto, una segunda importación
+  // heredaría el destino de la anterior y podría escribir en el lugar
   // equivocado sin que la persona lo note.
-  IMP.hojas = []; IMP.iHoja = 0; IMP.filas = []; IMP.iEnc = 0; IMP.columnas = [];
+  if (!conservarArchivo) { IMP.hojas = []; IMP.iHoja = 0; IMP.filas = []; IMP.iEnc = 0; }
+  IMP.columnas = [];
   IMP.mapa = { fecha: -1, concepto: -1, monto: -1, categoria: -1, ambito: -1 };
   IMP.destino = "gasto"; IMP.mes = ""; IMP.mapaCats = {}; IMP.catFija = null;
   IMP.ambitoFijo = ambitoActivo() === "negocio" ? "negocio" : "personal";
   IMP.listos = [];
-  abrirHoja("Importar desde Excel", "", caja => pasoArchivo(caja));
+  abrirHoja("Importar desde Excel", "",
+    caja => (conservarArchivo && IMP.hojas.length) ? pasoHoja(caja) : pasoArchivo(caja));
 }
 
 function cuerpoPaso(caja, n, titulo, html) {
@@ -3767,6 +3774,23 @@ function pasoResumen(caja) {
     }
     avisar("Se importaron " + ids.length + " registros");
     pintar();
+
+    // Un archivo con bloques en paralelo se carga en varias pasadas.
+    // Cerrar aquí obligaba a adivinar que faltaba repetir el proceso.
+    abrirHoja("Importación terminada",
+      '<div class="vacio" style="padding:var(--s-3) 0 var(--s-5)">' +
+        '<div class="vacio__hoja">' + svg("hoja", 36) + "</div>" +
+        '<p class="vacio__titulo">Entraron ' + ids.length + " registros</p>" +
+        '<p class="vacio__texto">Si tu hoja trae ingresos, gastos o cuentas por cobrar en ' +
+          "bloques distintos, cárgalos uno por uno.</p></div>" +
+        '<div class="btn-grupo">' +
+          '<button class="btn" type="button" id="fin-otro">Importar otro bloque</button>' +
+          '<button class="btn btn--fantasma" type="button" data-cerrar>Terminar</button>' +
+        "</div>",
+      c2 => c2.querySelector("#fin-otro").addEventListener("click", () => {
+        cerrarHoja();
+        hojaImportar(true);
+      }));
   });
 }
 
