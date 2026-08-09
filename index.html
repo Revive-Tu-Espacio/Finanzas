@@ -469,6 +469,7 @@ button,.ficha,.btn,label[for],.nav__btn,.reg__borrar{
   </button>
 </header>
 
+<div id="barra-ambito" class="envoltura" style="padding-bottom:0" hidden></div>
 <main id="vista" class="envoltura" tabindex="-1">
   <!-- Se reemplaza en cuanto corre el JavaScript. Si no corre —por ejemplo
        dentro del visor de documentos de WhatsApp— esto es lo que la persona ve
@@ -642,7 +643,8 @@ function estadoInicial() {
     movimientos: [],
     presupuesto: {},
     metas: [],
-    deudas: []
+    deudas: [],
+    porCobrar: []
   };
 }
 
@@ -769,7 +771,7 @@ function periodosPorMes(ciclo) { return periodosPorAnio(ciclo) / 12; }
 function movimientosDe(desplazamiento) {
   const { inicio, fin } = limitesPeriodo(datos.perfil.ancla, datos.perfil.ciclo, desplazamiento);
   const i = aISO(inicio), f = aISO(fin);
-  return datos.movimientos.filter(m => m.fecha >= i && m.fecha <= f);
+  return filtrarAmbito(datos.movimientos.filter(m => m.fecha >= i && m.fecha <= f));
 }
 
 /**
@@ -835,7 +837,9 @@ const ICONO = {
   atras:   '<path d="M15 5l-7 7 7 7"/>',
   adelante:'<path d="M9 5l7 7-7 7"/>',
   cerrar:  '<path d="M6 6l12 12M18 6L6 18"/>',
-  bote:    '<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>'
+  bote:    '<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>',
+  cobrar:  '<path d="M3 8h18v10H3z"/><circle cx="12" cy="13" r="2.5"/><path d="M7 5h10"/>',
+  importar:'<path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 17v3h16v-3"/>'
 };
 
 /**
@@ -1089,6 +1093,18 @@ function hojaAlertas() {
   abrirHoja("Alertas", cuerpo);
 }
 
+/** Pestañas: lo que debo y lo que me deben. */
+function vistaDeudas() {
+  const t = datos.pestanaBalance || "debo";
+  const pend = filtrarAmbito(datos.porCobrar.filter(c => !c.cobrado)).reduce((s, c) => s + c.monto, 0);
+  return '<h1 class="sr-only">Deudas y cuentas por cobrar</h1>' +
+    '<div class="segmentos" role="group" aria-label="Balance" style="margin-bottom:var(--s-4)">' +
+      '<button type="button" data-balance="debo" aria-pressed="' + (t === "debo") + '">Debo</button>' +
+      '<button type="button" data-balance="cobrar" aria-pressed="' + (t === "cobrar") + '">Me deben' +
+        (pend ? " · " + fmt(pend, true) : "") + "</button></div>" +
+    (t === "debo" ? bloqueDeudas() : bloquePorCobrar());
+}
+
 const SECCIONES = [
   { id: "resumen",     rotulo: "Resumen",  icono: "resumen" },
   { id: "movimientos", rotulo: "Movs",     icono: "lista" },
@@ -1113,7 +1129,7 @@ function pintarNav() {
 
 function pintar() {
   const main = document.getElementById("vista");
-  if (!datos.perfil) { main.innerHTML = vistaBienvenida(); pintarNav(); pintarPie(); pintarCampana(); return; }
+  if (!datos.perfil) { main.innerHTML = vistaBienvenida(); pintarNav(); pintarPie(); pintarCampana(); pintarAmbito(); return; }
 
   const mapa = {
     resumen: vistaResumen,
@@ -1131,6 +1147,7 @@ function pintar() {
   pintarNav();
   pintarPie();
   pintarCampana();
+  pintarAmbito();
 }
 
 function pintarPie() {
@@ -1538,8 +1555,8 @@ function filaDato(etiqueta, valor) {
     "<span>" + esc(etiqueta) + '</span><span class="num" style="font-weight:600">' + esc(valor) + "</span></div>";
 }
 
-function vistaDeudas() {
-  let html = "<h1 class=\"sr-only\">Mis deudas</h1>";
+function bloqueDeudas() {
+  let html = "";
   if (!datos.deudas.length) {
     return html + tarjetaCapacidad() + '<div class="tarjeta"><div class="vacio"><div class="vacio__hoja">' + svg("deuda", 36) + "</div>" +
       '<p class="vacio__titulo">Sin deudas registradas</p>' +
@@ -1613,6 +1630,30 @@ function vistaAjustes() {
             (p.ingresoEstimado || "") + '"></div>' +
         '<button class="btn btn--bloque" type="submit">Guardar cambios</button>' +
       "</form>" +
+    "</div>" +
+
+    '<div class="tarjeta">' +
+      '<h2 class="tarjeta__titulo">Importar desde Excel</h2>' +
+      '<p style="font-size:14px;color:var(--tinta-suave);margin:0 0 var(--s-4)">' +
+        "Si ya llevas tu control en una hoja de cálculo, cárgala aquí. Se lee dentro de tu " +
+        "teléfono y tú decides qué columna es cada cosa.</p>" +
+      '<button class="btn btn--bloque" type="button" id="btn-importar">Cargar un archivo</button>' +
+      (datos.ultimaImportacion && datos.ultimaImportacion.ids.length
+        ? '<button class="btn btn--peligro btn--bloque" type="button" id="btn-deshacer-imp" ' +
+          'style="margin-top:var(--s-3)">Deshacer la última importación (' +
+          datos.ultimaImportacion.ids.length + ")</button>"
+        : "") +
+    "</div>" +
+
+    '<div class="tarjeta">' +
+      '<h2 class="tarjeta__titulo">Personal y negocio</h2>' +
+      '<p style="font-size:14px;color:var(--tinta-suave);margin:0 0 var(--s-4)">' +
+        "Si tienes un negocio, sepáralo de tus gastos personales. Aparece un selector al " +
+        "capturar y puedes ver cada ámbito por separado.</p>" +
+      '<div class="segmentos" role="group" aria-label="Separar ámbitos">' +
+        '<button type="button" data-usaamb="0" aria-pressed="' + (!usaAmbitos()) + '">Todo junto</button>' +
+        '<button type="button" data-usaamb="1" aria-pressed="' + usaAmbitos() + '">Separado</button>' +
+      "</div>" +
     "</div>" +
 
     '<div class="tarjeta">' +
@@ -1712,6 +1753,12 @@ function hojaMovimiento() {
         '<div class="campo"><label for="m-metodo">Cómo pagaste</label>' +
           '<select class="entrada" id="m-metodo">' + METODOS.map(x => "<option>" + x + "</option>").join("") + "</select></div>" +
       "</div>" +
+      (usaAmbitos()
+        ? '<div class="campo"><label>Personal o negocio</label>' +
+          '<div class="segmentos" role="group" aria-label="Ámbito">' +
+          '<button type="button" data-ambmov="personal" aria-pressed="true">Personal</button>' +
+          '<button type="button" data-ambmov="negocio" aria-pressed="false">Negocio</button></div></div>'
+        : "") +
       '<div class="campo"><label for="m-nota">Nota (opcional)</label>' +
         '<input class="entrada" id="m-nota" type="text" maxlength="60" placeholder="Ej. despensa de la semana"></div>' +
       '<button class="btn btn--bloque" type="submit">Guardar</button>' +
@@ -1719,6 +1766,7 @@ function hojaMovimiento() {
 
   abrirHoja("Registrar movimiento", cuerpo, caja => {
     let tipo = "gasto", catSel = "comida";
+    let ambMov = ambitoActivo() === "negocio" ? "negocio" : "personal";
 
     function pintarCats() {
       const lista = tipo === "gasto" ? CATEGORIAS_GASTO : CATEGORIAS_INGRESO;
@@ -1735,6 +1783,12 @@ function hojaMovimiento() {
         tipo = bt.dataset.tipo;
         caja.querySelectorAll("[data-tipo]").forEach(b => b.setAttribute("aria-pressed", String(b === bt)));
         pintarCats();
+        return;
+      }
+      const ba = e.target.closest("[data-ambmov]");
+      if (ba) {
+        ambMov = ba.dataset.ambmov;
+        caja.querySelectorAll("[data-ambmov]").forEach(x => x.setAttribute("aria-pressed", String(x === ba)));
         return;
       }
       const bc = e.target.closest("[data-cat]");
@@ -1763,7 +1817,7 @@ function hojaMovimiento() {
         fecha: caja.querySelector("#m-fecha").value || aISO(hoy()),
         metodo: caja.querySelector("#m-metodo").value,
         nota: caja.querySelector("#m-nota").value.trim(),
-        creado: Date.now()
+        ambito: ambMov, creado: Date.now()
       });
       await persistir();
       cerrarHoja();
@@ -2011,8 +2065,7 @@ function rangoDe(clave, desde, hasta) {
 
 /** Movimientos dentro de un rango ISO, ordenados de la captura más vieja a la más nueva. */
 function movimientosEnRango(r) {
-  return datos.movimientos
-    .filter(m => m.fecha >= r.i && m.fecha <= r.f)
+  return filtrarAmbito(datos.movimientos.filter(m => m.fecha >= r.i && m.fecha <= r.f))
     .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.creado - b.creado);
 }
 
@@ -2476,7 +2529,7 @@ function exportarExcel(r) {
   const h1 = [];
   h1.push([{ v: "REVIVE TU ESPACIO A.C.", s: E.MARCA }]);
   h1.push([{ v: "Estado de ingresos y egresos", s: E.TITULO }]);
-  h1.push([{ v: "De " + persona + " · " + r.etq, s: E.SUB }]);
+  h1.push([{ v: "De " + persona + etiquetaAmbito() + " · " + r.etq, s: E.SUB }]);
   h1.push([{ v: "(Cifras en pesos mexicanos, preparadas sobre base de efectivo. Información no auditada.)", s: E.SUB }]);
   h1.push([]);
   h1.push([
@@ -2800,6 +2853,7 @@ function importarJSON(archivo) {
         presupuesto: entrante.presupuesto || {},
         metas: Array.isArray(entrante.metas) ? entrante.metas : [],
         deudas: Array.isArray(entrante.deudas) ? entrante.deudas : [],
+        porCobrar: Array.isArray(entrante.porCobrar) ? entrante.porCobrar : [],
         estrategiaDeuda: entrante.estrategiaDeuda || "nieve"
       };
       if (datos.perfil) desfase = periodoActual(datos.perfil.ancla, datos.perfil.ciclo);
@@ -2813,6 +2867,820 @@ function importarJSON(archivo) {
   };
   lector.onerror = () => avisar("No se pudo leer el archivo");
   lector.readAsText(archivo);
+}
+
+/* ================================================================
+   11. ÁMBITO PERSONAL / NEGOCIO
+   Se activa desde Ajustes. Apagado por omisión: para quien no tiene
+   negocio, un selector extra en cada captura es fricción pura.
+   ================================================================ */
+
+/** @returns {boolean} si el perfil separa personal de negocio */
+function usaAmbitos() { return !!(datos.perfil && datos.perfil.usaAmbitos); }
+
+/** Ámbito que se está viendo: 'todo' | 'personal' | 'negocio'. */
+function ambitoActivo() {
+  return usaAmbitos() ? (datos.perfil.ambitoActivo || "todo") : "todo";
+}
+
+/**
+ * Filtra por el ámbito activo. Los movimientos viejos, capturados
+ * antes de activar la separación, se consideran personales.
+ * @param {Array} movs
+ * @returns {Array}
+ */
+function filtrarAmbito(movs) {
+  const a = ambitoActivo();
+  if (a === "todo") return movs;
+  return movs.filter(m => (m.ambito || "personal") === a);
+}
+
+function pintarAmbito() {
+  const barra = document.getElementById("barra-ambito");
+  if (!usaAmbitos()) { barra.hidden = true; barra.innerHTML = ""; return; }
+  barra.hidden = false;
+  const a = ambitoActivo();
+  barra.innerHTML = '<div class="segmentos" role="group" aria-label="Ámbito">' +
+    [["todo", "Todo"], ["personal", "Personal"], ["negocio", "Negocio"]].map(([k, t]) =>
+      '<button type="button" data-ambito="' + k + '" aria-pressed="' + (k === a) + '">' + t + "</button>"
+    ).join("") + "</div>";
+}
+
+/** Sufijo para títulos de reportes. */
+function etiquetaAmbito() {
+  const a = ambitoActivo();
+  return a === "todo" ? "" : a === "negocio" ? " · Negocio" : " · Personal";
+}
+
+/* ================================================================
+   12. CUENTAS POR COBRAR
+   Dinero que todavía no entra. No son ingresos: contarlos como tales
+   infla el periodo y arruina todos los indicadores. Solo cuando se
+   cobran generan un movimiento de ingreso.
+   ================================================================ */
+
+/** Total pendiente de cobro, filtrado por ámbito. */
+function totalPorCobrar() {
+  return filtrarAmbito(datos.porCobrar.filter(c => !c.cobrado)).reduce((s, c) => s + c.monto, 0);
+}
+
+function bloquePorCobrar() {
+  const pendientes = filtrarAmbito(datos.porCobrar.filter(c => !c.cobrado));
+  const cobradas = filtrarAmbito(datos.porCobrar.filter(c => c.cobrado)).slice(-5).reverse();
+
+  if (!datos.porCobrar.length) {
+    return '<div class="tarjeta"><div class="vacio"><div class="vacio__hoja">' + svg("cobrar", 36) + "</div>" +
+      '<p class="vacio__titulo">Nada por cobrar registrado</p>' +
+      '<p class="vacio__texto">Si alguien te debe —un trabajo entregado, dinero que prestaste— anótalo aquí. ' +
+      "No cuenta como ingreso hasta que lo cobras, y así no te engañas con dinero que todavía no llega.</p>" +
+      '<button class="btn" type="button" data-abrir="cobrar">Registrar algo por cobrar</button></div></div>';
+  }
+
+  const total = pendientes.reduce((s, c) => s + c.monto, 0);
+  const porTipo = {};
+  pendientes.forEach(c => { porTipo[c.tipo || "Sin clasificar"] = (porTipo[c.tipo || "Sin clasificar"] || 0) + c.monto; });
+
+  let html = '<div class="tarjeta"><div class="balance">' +
+    '<div class="balance__rotulo">Te deben</div>' +
+    '<div class="balance__monto num">' + fmt(total) + "</div>" +
+    '<p class="balance__nota">' + pendientes.length +
+      (pendientes.length === 1 ? " cuenta pendiente" : " cuentas pendientes") +
+      ". Este dinero no cuenta como ingreso hasta que lo cobras.</p></div>";
+
+  const entradas = Object.entries(porTipo).sort((a, b) => b[1] - a[1]);
+  if (entradas.length > 1) {
+    html += '<div style="border-top:1px solid var(--linea);padding-top:var(--s-4)">' +
+      entradas.map(([t, v]) => {
+        const p = Math.round(v / (total || 1) * 100);
+        return '<div class="barra-fila"><div class="barra-cab">' +
+          '<span class="barra-cab__nombre">' + esc(t) + "</span>" +
+          '<span class="barra-cab__cifra num">' + fmt(v, true) + " · " + p + "%</span></div>" +
+          '<div class="barra"><div class="barra__relleno" style="width:' + p + '%"></div></div></div>';
+      }).join("") + "</div>";
+  }
+  html += "</div>";
+
+  html += '<div class="tarjeta"><h2 class="tarjeta__titulo">Pendientes de cobro</h2><ul class="lista">' +
+    pendientes.map(c =>
+      '<li class="reg"><div class="reg__cuerpo">' +
+        '<div class="reg__nombre">' + esc(c.concepto) + "</div>" +
+        '<div class="reg__meta">' + esc(c.tipo || "Sin clasificar") +
+          (c.fecha ? " · " + esc(FMT_DIA.format(aFecha(c.fecha))) : "") + "</div></div>" +
+      '<span class="reg__monto num">' + fmt(c.monto) + "</span>" +
+      '<button class="reg__borrar" type="button" data-borrar-cobro="' + c.id + '" ' +
+        'aria-label="Quitar cuenta por cobrar">' + svg("bote", 18) + "</button></li>" +
+      '<li style="padding:0 0 var(--s-3)"><button class="btn btn--fantasma" type="button" ' +
+        'data-cobrado="' + c.id + '">Ya me lo pagaron</button></li>"'.replace('"', "")
+    ).join("") + "</ul></div>";
+
+  if (cobradas.length) {
+    html += '<div class="tarjeta"><h2 class="tarjeta__titulo">Cobrado recientemente</h2><ul class="lista">' +
+      cobradas.map(c =>
+        '<li class="reg"><div class="reg__cuerpo">' +
+          '<div class="reg__nombre">' + esc(c.concepto) + "</div>" +
+          '<div class="reg__meta">Cobrado el ' + esc(FMT_DIA.format(aFecha(c.fechaCobro))) + "</div></div>" +
+        '<span class="reg__monto num ingreso">' + fmt(c.monto) + "</span></li>"
+      ).join("") + "</ul></div>";
+  }
+
+  html += '<button class="btn btn--fantasma btn--bloque" type="button" data-abrir="cobrar">Agregar otra cuenta por cobrar</button>';
+  return html;
+}
+
+/** Alta de una cuenta por cobrar. */
+function hojaCobrar() {
+  const tipos = [...new Set(datos.porCobrar.map(c => c.tipo).filter(Boolean))];
+  const cuerpo =
+    '<form id="form-cobrar" novalidate>' +
+      '<div class="campo"><label for="cb-concepto">¿Qué te deben?</label>' +
+        '<input class="entrada" id="cb-concepto" type="text" maxlength="60" required ' +
+        'placeholder="Ej. trabajo entregado a Fulano"></div>' +
+      '<div class="campo"><label for="cb-monto">¿Cuánto?</label>' +
+        '<input class="entrada entrada--monto" id="cb-monto" type="number" inputmode="decimal" ' +
+        'min="0.01" step="0.01" required placeholder="0.00"></div>' +
+      '<div class="campo"><label for="cb-tipo">Tipo (opcional)</label>' +
+        '<input class="entrada" id="cb-tipo" type="text" maxlength="30" list="lista-tipos" ' +
+        'placeholder="Ej. servicios, préstamo">' +
+        (tipos.length ? '<datalist id="lista-tipos">' + tipos.map(t => "<option>" + esc(t) + "</option>").join("") + "</datalist>" : "") +
+      "</div>" +
+      (usaAmbitos()
+        ? '<div class="campo"><label>Ámbito</label><div class="segmentos" role="group" aria-label="Ámbito">' +
+          '<button type="button" data-amb="personal" aria-pressed="true">Personal</button>' +
+          '<button type="button" data-amb="negocio" aria-pressed="false">Negocio</button></div></div>'
+        : "") +
+      '<div class="campo"><label for="cb-fecha">¿Desde cuándo? (opcional)</label>' +
+        '<input class="entrada" id="cb-fecha" type="date" max="' + aISO(hoy()) + '"></div>' +
+      '<p class="campo__error" id="err-cobrar" hidden></p>' +
+      '<button class="btn btn--bloque" type="submit">Guardar</button>' +
+    "</form>";
+
+  abrirHoja("Algo por cobrar", cuerpo, caja => {
+    let amb = "personal";
+    caja.addEventListener("click", e => {
+      const b = e.target.closest("[data-amb]");
+      if (!b) return;
+      amb = b.dataset.amb;
+      caja.querySelectorAll("[data-amb]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    });
+    caja.querySelector("#form-cobrar").addEventListener("submit", async e => {
+      e.preventDefault();
+      const concepto = caja.querySelector("#cb-concepto").value.trim();
+      const monto = parseFloat(caja.querySelector("#cb-monto").value);
+      const err = caja.querySelector("#err-cobrar");
+      if (!concepto || !Number.isFinite(monto) || monto <= 0) {
+        err.hidden = false;
+        err.innerHTML = svg("alerta", 15) + "<span>Necesito el concepto y un monto mayor a cero.</span>";
+        return;
+      }
+      datos.porCobrar.push({
+        id: id(), concepto, monto: Math.round(monto * 100) / 100,
+        tipo: caja.querySelector("#cb-tipo").value.trim(),
+        ambito: amb, fecha: caja.querySelector("#cb-fecha").value || null,
+        cobrado: false, fechaCobro: null
+      });
+      await persistir(); cerrarHoja(); avisar("Registrado"); pintar();
+    });
+  });
+}
+
+/** Marca una cuenta como cobrada y genera el ingreso correspondiente. */
+function hojaMarcarCobrado(cobroId) {
+  const c = datos.porCobrar.find(x => x.id === cobroId);
+  if (!c) return;
+  const cuerpo =
+    '<form id="form-cobro" novalidate>' +
+      '<p style="margin:0 0 var(--s-4);font-size:15px;color:var(--tinta-suave)">' +
+        esc(c.concepto) + " — " + fmt(c.monto) + "</p>" +
+      '<div class="campo"><label for="co-monto">¿Cuánto te pagaron?</label>' +
+        '<input class="entrada entrada--monto" id="co-monto" type="number" inputmode="decimal" ' +
+        'min="0.01" step="0.01" value="' + c.monto + '" required></div>' +
+      '<div class="campo"><label for="co-fecha">¿Cuándo?</label>' +
+        '<input class="entrada" id="co-fecha" type="date" value="' + aISO(hoy()) + '" max="' + aISO(hoy()) + '"></div>' +
+      '<div class="nota">' + svg("info", 18) +
+        "<div>Se va a registrar como ingreso de ese día, así aparece en tu resumen y en tus reportes.</div></div>" +
+      '<button class="btn btn--bloque" type="submit" style="margin-top:var(--s-4)">Confirmar cobro</button>' +
+    "</form>";
+
+  abrirHoja("Registrar el cobro", cuerpo, caja => {
+    caja.querySelector("#form-cobro").addEventListener("submit", async e => {
+      e.preventDefault();
+      const monto = parseFloat(caja.querySelector("#co-monto").value);
+      if (!Number.isFinite(monto) || monto <= 0) return;
+      const fecha = caja.querySelector("#co-fecha").value || aISO(hoy());
+
+      datos.movimientos.push({
+        id: id(), tipo: "ingreso", monto: Math.round(monto * 100) / 100,
+        categoria: c.ambito === "negocio" ? "negocio" : "otro_in",
+        fecha, metodo: "Transferencia", nota: c.concepto,
+        ambito: c.ambito || "personal", creado: Date.now()
+      });
+      c.cobrado = true; c.fechaCobro = fecha;
+      // Si te pagaron menos de lo pactado, el resto sigue pendiente.
+      if (monto < c.monto) {
+        datos.porCobrar.push({
+          id: id(), concepto: c.concepto + " (saldo)", monto: Math.round((c.monto - monto) * 100) / 100,
+          tipo: c.tipo, ambito: c.ambito, fecha: c.fecha, cobrado: false, fechaCobro: null
+        });
+      }
+      await persistir(); cerrarHoja();
+      avisar(monto < c.monto ? "Cobro parcial registrado" : "Cobro registrado");
+      pintar();
+    });
+  });
+}
+
+/* ================================================================
+   13. IMPORTAR DESDE EXCEL O CSV
+
+   Un .xlsx es un ZIP comprimido. Se descomprime con
+   DecompressionStream('deflate-raw'), nativo en los navegadores
+   actuales, para no cargar ninguna librería y seguir funcionando
+   sin conexión. Si el navegador no lo soporta, se pide un CSV.
+   ================================================================ */
+
+/** @returns {boolean} si este navegador puede abrir .xlsx */
+function puedeLeerXLSX() { return typeof DecompressionStream === "function"; }
+
+/** Descomprime un bloque deflate crudo. */
+async function inflar(bytes) {
+  const flujo = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(flujo).arrayBuffer());
+}
+
+/**
+ * Extrae los archivos de un ZIP en memoria.
+ * @param {Uint8Array} b contenido del ZIP
+ * @returns {Promise<Object<string,string>>} nombre → contenido en texto
+ */
+async function abrirZip(b) {
+  const v = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  // El fin del directorio central está al final; se busca hacia atrás.
+  let fin = -1;
+  for (let i = b.length - 22; i >= 0 && i > b.length - 65558; i--) {
+    if (v.getUint32(i, true) === 0x06054b50) { fin = i; break; }
+  }
+  if (fin < 0) throw new Error("No parece un archivo .xlsx válido");
+
+  const total = v.getUint16(fin + 10, true);
+  let p = v.getUint32(fin + 16, true);
+  const dec = new TextDecoder();
+  const salida = {};
+
+  for (let n = 0; n < total; n++) {
+    if (v.getUint32(p, true) !== 0x02014b50) break;
+    const metodo = v.getUint16(p + 10, true);
+    const comprimido = v.getUint32(p + 20, true);
+    const largoNombre = v.getUint16(p + 28, true);
+    const largoExtra = v.getUint16(p + 30, true);
+    const largoCom = v.getUint16(p + 32, true);
+    const desplazamiento = v.getUint32(p + 42, true);
+    const nombre = dec.decode(b.subarray(p + 46, p + 46 + largoNombre));
+    p += 46 + largoNombre + largoExtra + largoCom;
+
+    if (!/\.(xml|rels)$/i.test(nombre)) continue;
+    const lv = new DataView(b.buffer, b.byteOffset + desplazamiento, 30);
+    const inicio = desplazamiento + 30 + lv.getUint16(26, true) + lv.getUint16(28, true);
+    const crudo = b.subarray(inicio, inicio + comprimido);
+    salida[nombre] = dec.decode(metodo === 0 ? crudo : await inflar(crudo));
+  }
+  return salida;
+}
+
+/** Convierte una referencia de celda (C17) en índice de columna base 0. */
+function indiceColumna(ref) {
+  const letras = ref.match(/^[A-Z]+/)[0];
+  let n = 0;
+  for (const ch of letras) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+
+/**
+ * Lee un .xlsx y devuelve sus hojas como matrices de texto.
+ * @param {File} archivo
+ * @returns {Promise<Array<{nombre:string, filas:Array<Array<string>>}>>}
+ */
+async function leerXLSX(archivo) {
+  const partes = await abrirZip(new Uint8Array(await archivo.arrayBuffer()));
+  const dom = new DOMParser();
+
+  // Cadenas compartidas: la mayoría del texto de un xlsx vive aquí.
+  const compartidas = [];
+  if (partes["xl/sharedStrings.xml"]) {
+    const d = dom.parseFromString(partes["xl/sharedStrings.xml"], "application/xml");
+    d.querySelectorAll("si").forEach(si => {
+      compartidas.push([...si.querySelectorAll("t")].map(t => t.textContent).join(""));
+    });
+  }
+
+  // Nombres de hoja y su archivo correspondiente.
+  const libro = dom.parseFromString(partes["xl/workbook.xml"], "application/xml");
+  const rels = dom.parseFromString(partes["xl/_rels/workbook.xml.rels"], "application/xml");
+  const destino = {};
+  rels.querySelectorAll("Relationship").forEach(r => {
+    destino[r.getAttribute("Id")] = r.getAttribute("Target").replace(/^\/?xl\//, "").replace(/^\//, "");
+  });
+
+  const hojas = [];
+  const nodos = [...libro.querySelectorAll("sheet")];
+  for (let i = 0; i < nodos.length; i++) {
+    const s = nodos[i];
+    const rid = s.getAttribute("r:id") || s.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+    let ruta = destino[rid] || ("worksheets/sheet" + (i + 1) + ".xml");
+    const xml = partes["xl/" + ruta];
+    if (!xml) continue; // hojas de gráfico no traen celdas
+
+    const hd = dom.parseFromString(xml, "application/xml");
+    const filas = [];
+    hd.querySelectorAll("row").forEach(fila => {
+      const n = parseInt(fila.getAttribute("r"), 10) - 1;
+      const celdas = [];
+      fila.querySelectorAll("c").forEach(c => {
+        const ref = c.getAttribute("r");
+        const col = ref ? indiceColumna(ref) : celdas.length;
+        const tipo = c.getAttribute("t");
+        let val = "";
+        if (tipo === "inlineStr") val = [...c.querySelectorAll("t")].map(t => t.textContent).join("");
+        else {
+          const vNodo = c.querySelector("v");
+          const bruto = vNodo ? vNodo.textContent : "";
+          val = tipo === "s" ? (compartidas[parseInt(bruto, 10)] || "") : bruto;
+        }
+        celdas[col] = val;
+      });
+      filas[n] = celdas;
+    });
+    hojas.push({ nombre: s.getAttribute("name") || ("Hoja " + (i + 1)), filas: filas.map(f => f || []) });
+  }
+  return hojas;
+}
+
+/**
+ * Lee un CSV respetando comillas y saltos de línea internos.
+ * @param {string} texto
+ * @returns {Array<Array<string>>}
+ */
+function leerCSV(texto) {
+  const t = texto.replace(/^\uFEFF/, "");
+  const filas = [];
+  let fila = [], campo = "", enComillas = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (enComillas) {
+      if (ch === '"') { if (t[i + 1] === '"') { campo += '"'; i++; } else enComillas = false; }
+      else campo += ch;
+    } else if (ch === '"') enComillas = true;
+    else if (ch === "," || ch === ";") { fila.push(campo); campo = ""; }
+    else if (ch === "\n") { fila.push(campo); filas.push(fila); fila = []; campo = ""; }
+    else if (ch !== "\r") campo += ch;
+  }
+  if (campo || fila.length) { fila.push(campo); filas.push(fila); }
+  return filas;
+}
+
+/**
+ * Encuentra la fila de encabezados: la que más celdas de texto tiene
+ * en las primeras 40. En el archivo de referencia es la 17, no la 1.
+ * @param {Array<Array<string>>} filas
+ * @returns {number} índice base 0, o -1 si no hay candidata
+ */
+function detectarEncabezado(filas) {
+  let mejor = -1, puntos = 1;
+  for (let i = 0; i < Math.min(filas.length, 40); i++) {
+    const n = (filas[i] || []).filter(c => String(c || "").trim() && isNaN(parseFloat(c))).length;
+    if (n > puntos) { puntos = n; mejor = i; }
+  }
+  return mejor;
+}
+
+/** Interpreta una celda de fecha: serie de Excel o texto dd/mm/aaaa. */
+function interpretarFecha(v) {
+  if (v === null || v === undefined || v === "") return null;
+  const n = parseFloat(v);
+  if (Number.isFinite(n) && n > 20000 && n < 80000) {
+    return aISO(new Date(Date.UTC(1899, 11, 30) + n * 86400000));
+  }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0");
+  m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (m) {
+    const a = m[3].length === 2 ? "20" + m[3] : m[3];
+    return a + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0");
+  }
+  return null;
+}
+
+/** Convierte texto de importe a número, tolerando $ , y espacios. */
+function interpretarMonto(v) {
+  if (typeof v === "number") return v;
+  const s = String(v ?? "").replace(/[^0-9.,\-]/g, "").replace(/,/g, "");
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? Math.abs(Math.round(n * 100) / 100) : null;
+}
+
+/**
+ * Reparte fechas a lo largo de un mes sin rebasar el día de hoy.
+ * Si el mes es el actual, el último día disponible es hoy.
+ * @param {number} cuantos
+ * @param {string} mesISO 'AAAA-MM'
+ * @returns {string[]} fechas ISO, una por movimiento, en orden
+ */
+function repartirFechas(cuantos, mesISO) {
+  const [a, m] = mesISO.split("-").map(Number);
+  const t = hoy();
+  const ultimoDelMes = new Date(a, m, 0).getDate();
+  const esMesActual = a === t.getFullYear() && m === t.getMonth() + 1;
+  const tope = esMesActual ? Math.min(t.getDate(), ultimoDelMes) : ultimoDelMes;
+
+  const fechas = [];
+  for (let i = 0; i < cuantos; i++) {
+    const dia = cuantos === 1 ? tope : Math.max(1, Math.min(tope, Math.round((i + 0.5) * tope / cuantos)));
+    fechas.push(aISO(new Date(a, m - 1, dia)));
+  }
+  return fechas;
+}
+
+/** Clave de deduplicación: mismo ámbito, tipo, fecha, monto y concepto. */
+function claveMovimiento(m) {
+  return [(m.ambito || "personal"), m.tipo, m.fecha, m.monto.toFixed(2),
+          String(m.nota || "").trim().toLowerCase()].join("|");
+}
+
+/* ---------------------------------------------------------------
+   Asistente de importación. Cinco pasos, nada se escribe hasta el
+   último. El estado vive en este objeto mientras la hoja está abierta.
+   --------------------------------------------------------------- */
+const IMP = {
+  hojas: [], iHoja: 0, filas: [], iEnc: 0, columnas: [],
+  mapa: { fecha: -1, concepto: -1, monto: -1, categoria: -1, ambito: -1 },
+  destino: "gasto", mes: "", mapaCats: {}, ambitoFijo: "personal", listos: []
+};
+
+function hojaImportar() {
+  // Reinicio obligatorio: sin esto, una segunda importación heredaría el
+  // mapeo y el destino de la anterior, y podría escribir en el lugar
+  // equivocado sin que la persona lo note.
+  IMP.hojas = []; IMP.iHoja = 0; IMP.filas = []; IMP.iEnc = 0; IMP.columnas = [];
+  IMP.mapa = { fecha: -1, concepto: -1, monto: -1, categoria: -1, ambito: -1 };
+  IMP.destino = "gasto"; IMP.mes = ""; IMP.mapaCats = {}; IMP.catFija = null;
+  IMP.ambitoFijo = ambitoActivo() === "negocio" ? "negocio" : "personal";
+  IMP.listos = [];
+  abrirHoja("Importar desde Excel", "", caja => pasoArchivo(caja));
+}
+
+function cuerpoPaso(caja, n, titulo, html) {
+  caja.querySelector("#hoja-titulo").textContent = titulo;
+  const previo = caja.querySelector("#paso-cuerpo");
+  const marco = '<p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;' +
+    'color:var(--tinta-suave);margin:0 0 var(--s-4)">Paso ' + n + " de 5</p>" + html;
+  if (previo) previo.innerHTML = marco;
+  else caja.insertAdjacentHTML("beforeend", '<div id="paso-cuerpo">' + marco + "</div>");
+}
+
+/* --- Paso 1: archivo --- */
+function pasoArchivo(caja) {
+  cuerpoPaso(caja, 1, "Importar movimientos",
+    '<p style="font-size:15px;color:var(--tinta-suave);margin:0 0 var(--s-4)">' +
+      "Se lee el archivo dentro de tu teléfono. No se sube a ningún servidor.</p>" +
+    (puedeLeerXLSX() ? "" :
+      '<div class="nota nota--alerta" style="margin-bottom:var(--s-4)">' + svg("alerta", 18) +
+      "<div>Este navegador no puede abrir archivos .xlsx. Guarda tu hoja como CSV desde " +
+      "Excel y súbela así.</div></div>") +
+    '<label class="btn btn--bloque" for="imp-archivo" style="cursor:pointer">Elegir archivo</label>' +
+    '<input type="file" id="imp-archivo" class="sr-only" accept=".xlsx,.csv,text/csv,' +
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">' +
+    '<p class="campo__ayuda">Acepta .xlsx y .csv</p>' +
+    '<p class="campo__error" id="imp-err" hidden></p>');
+
+  caja.querySelector("#imp-archivo").addEventListener("change", async e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const err = caja.querySelector("#imp-err");
+    err.hidden = true;
+    try {
+      if (/\.csv$/i.test(f.name)) {
+        IMP.hojas = [{ nombre: f.name, filas: leerCSV(await f.text()) }];
+      } else {
+        if (!puedeLeerXLSX()) throw new Error("Este navegador no abre .xlsx; usa CSV");
+        IMP.hojas = await leerXLSX(f);
+      }
+      if (!IMP.hojas.length) throw new Error("El archivo no tiene hojas con datos");
+      IMP.iHoja = IMP.hojas.findIndex(h => h.filas.some(r => r.length > 1));
+      if (IMP.iHoja < 0) IMP.iHoja = 0;
+      pasoHoja(caja);
+    } catch (ex) {
+      err.hidden = false;
+      err.innerHTML = svg("alerta", 15) + "<span>" + esc(ex.message || "No se pudo leer el archivo") + "</span>";
+    }
+  });
+}
+
+/* --- Paso 2: hoja y fila de encabezados --- */
+function pasoHoja(caja) {
+  const h = IMP.hojas[IMP.iHoja];
+  IMP.filas = h.filas;
+  const sugerida = detectarEncabezado(IMP.filas);
+  IMP.iEnc = sugerida >= 0 ? sugerida : 0;
+
+  cuerpoPaso(caja, 2, "¿Dónde están los títulos?",
+    (IMP.hojas.length > 1
+      ? '<div class="campo"><label for="imp-hoja">Hoja</label><select class="entrada" id="imp-hoja">' +
+        IMP.hojas.map((x, i) => '<option value="' + i + '"' + (i === IMP.iHoja ? " selected" : "") + ">" +
+          esc(x.nombre) + "</option>").join("") + "</select></div>"
+      : "") +
+    '<div class="campo"><label for="imp-enc">Fila con los títulos de columna</label>' +
+      '<select class="entrada" id="imp-enc">' +
+        IMP.filas.map((f, i) => {
+          const txt = f.filter(c => String(c || "").trim()).slice(0, 5).join(" · ");
+          return txt ? '<option value="' + i + '"' + (i === IMP.iEnc ? " selected" : "") + ">Fila " +
+            (i + 1) + ": " + esc(txt.slice(0, 46)) + "</option>" : "";
+        }).join("") + "</select>" +
+      '<p class="campo__ayuda">Se detectó automáticamente. Cámbiala si no es la correcta.</p></div>' +
+    '<div class="btn-grupo"><button class="btn btn--bloque" type="button" id="imp-sig">Continuar</button></div>');
+
+  const selHoja = caja.querySelector("#imp-hoja");
+  if (selHoja) selHoja.addEventListener("change", e => { IMP.iHoja = +e.target.value; pasoHoja(caja); });
+  caja.querySelector("#imp-enc").addEventListener("change", e => { IMP.iEnc = +e.target.value; });
+  caja.querySelector("#imp-sig").addEventListener("click", () => pasoMapeo(caja));
+}
+
+/* --- Paso 3: qué es cada columna --- */
+function pasoMapeo(caja) {
+  const enc = IMP.filas[IMP.iEnc] || [];
+  IMP.columnas = enc.map((c, i) => ({ i, nombre: String(c || "").trim() || "Columna " + (i + 1) }))
+                    .filter(c => {
+                      // se conservan las columnas con algún dato debajo del encabezado
+                      return IMP.filas.slice(IMP.iEnc + 1).some(f => String((f || [])[c.i] || "").trim());
+                    });
+
+  const opciones = (sel) => '<option value="-1">— ninguna —</option>' +
+    IMP.columnas.map(c => '<option value="' + c.i + '"' + (c.i === sel ? " selected" : "") + ">" +
+      esc(c.nombre) + "</option>").join("");
+
+  // Sugerencia por nombre de encabezado
+  const buscar = re => { const c = IMP.columnas.find(x => re.test(x.nombre.toLowerCase())); return c ? c.i : -1; };
+  if (IMP.mapa.monto === -1) IMP.mapa.monto = buscar(/cantidad|monto|importe|total/);
+  if (IMP.mapa.concepto === -1) IMP.mapa.concepto = buscar(/concepto|descrip|detalle/);
+  if (IMP.mapa.fecha === -1) IMP.mapa.fecha = buscar(/fecha|d[ií]a/);
+  if (IMP.mapa.categoria === -1) IMP.mapa.categoria = buscar(/categor|rubro/);
+  if (IMP.mapa.ambito === -1) IMP.mapa.ambito = buscar(/^tipo$|ambito|ámbito/);
+
+  cuerpoPaso(caja, 3, "¿Qué es cada columna?",
+    '<div class="campo"><label>¿Qué estás importando?</label>' +
+      '<div class="segmentos" role="group" aria-label="Destino">' +
+        [["gasto", "Gastos"], ["ingreso", "Ingresos"], ["cobrar", "Por cobrar"]].map(([k, t]) =>
+          '<button type="button" data-destino="' + k + '" aria-pressed="' + (k === IMP.destino) + '">' +
+          t + "</button>").join("") + "</div>" +
+      '<p class="campo__ayuda">Si tu archivo tiene ingresos y gastos en bloques separados, ' +
+        "impórtalos de uno en uno.</p></div>" +
+    '<div class="campo"><label for="mp-monto">Monto <span style="color:var(--alerta)">*</span></label>' +
+      '<select class="entrada" id="mp-monto">' + opciones(IMP.mapa.monto) + "</select></div>" +
+    '<div class="campo"><label for="mp-concepto">Concepto</label>' +
+      '<select class="entrada" id="mp-concepto">' + opciones(IMP.mapa.concepto) + "</select></div>" +
+    '<div class="campo"><label for="mp-fecha">Fecha</label>' +
+      '<select class="entrada" id="mp-fecha">' + opciones(IMP.mapa.fecha) + "</select>" +
+      '<p class="campo__ayuda">Si tu archivo no la trae, en el siguiente paso se reparten a lo largo del mes.</p></div>' +
+    '<div class="campo"><label for="mp-categoria">Categoría</label>' +
+      '<select class="entrada" id="mp-categoria">' + opciones(IMP.mapa.categoria) + "</select></div>" +
+    '<div class="campo"><label for="mp-ambito">Personal o negocio</label>' +
+      '<select class="entrada" id="mp-ambito">' + opciones(IMP.mapa.ambito) + "</select></div>" +
+    '<p class="campo__error" id="mp-err" hidden></p>' +
+    '<div class="btn-grupo"><button class="btn btn--fantasma" type="button" id="mp-atras">Atrás</button>' +
+    '<button class="btn" type="button" id="mp-sig">Continuar</button></div>');
+
+  caja.querySelector("#paso-cuerpo").addEventListener("click", e => {
+    const b = e.target.closest("[data-destino]");
+    if (!b) return;
+    IMP.destino = b.dataset.destino;
+    caja.querySelectorAll("[data-destino]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  });
+  caja.querySelector("#mp-atras").addEventListener("click", () => pasoHoja(caja));
+  caja.querySelector("#mp-sig").addEventListener("click", () => {
+    ["monto", "concepto", "fecha", "categoria", "ambito"].forEach(k => {
+      IMP.mapa[k] = +caja.querySelector("#mp-" + k).value;
+    });
+    const err = caja.querySelector("#mp-err");
+    if (IMP.mapa.monto < 0) {
+      err.hidden = false;
+      err.innerHTML = svg("alerta", 15) + "<span>Necesito saber cuál columna trae el monto.</span>";
+      return;
+    }
+    err.hidden = true;
+    pasoDetalles(caja);
+  });
+}
+
+/* --- Paso 4: fechas faltantes y traducción de categorías --- */
+function pasoDetalles(caja) {
+  const cuerpoFilas = IMP.filas.slice(IMP.iEnc + 1);
+  const sinFecha = IMP.mapa.fecha < 0;
+  const t = hoy();
+  if (!IMP.mes) IMP.mes = t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0");
+
+  const catsArchivo = IMP.mapa.categoria >= 0
+    ? [...new Set(cuerpoFilas.map(f => String((f || [])[IMP.mapa.categoria] || "").trim()).filter(Boolean))]
+    : [];
+  const catsApp = IMP.destino === "ingreso" ? CATEGORIAS_INGRESO : CATEGORIAS_GASTO;
+  const porOmision = IMP.destino === "ingreso" ? "otro_in" : "otros";
+
+  let html = "";
+  if (sinFecha) {
+    html += '<div class="campo"><label for="mp-mes">¿A qué mes pertenecen?</label>' +
+      '<input class="entrada" id="mp-mes" type="month" value="' + IMP.mes + '" max="' +
+        t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") + '">' +
+      '<p class="campo__ayuda">Tu archivo no trae fechas. Se reparten a lo largo del mes, en el ' +
+        "orden en que están, y nunca después de hoy.</p></div>";
+  }
+
+  if (IMP.destino !== "cobrar") {
+    if (catsArchivo.length) {
+      html += '<div class="campo"><label>¿A qué categoría corresponde cada una?</label>' +
+        '<p class="campo__ayuda" style="margin:0 0 var(--s-3)">Lo que dejes en "Otros" se puede ' +
+          "corregir después movimiento por movimiento.</p>" +
+        catsArchivo.map(c => {
+          const sugerida = catsApp.find(a => a.nombre.toLowerCase() === c.toLowerCase());
+          const val = IMP.mapaCats[c] || (sugerida ? sugerida.id : porOmision);
+          return '<div style="display:flex;align-items:center;gap:var(--s-3);margin-bottom:var(--s-2)">' +
+            '<span style="flex:1;font-size:14px;min-width:0;overflow:hidden;text-overflow:ellipsis;' +
+              'white-space:nowrap">' + esc(c) + "</span>" +
+            '<select class="entrada" data-cat="' + esc(c) + '" style="flex:1;min-height:40px">' +
+              catsApp.map(a => '<option value="' + a.id + '"' + (a.id === val ? " selected" : "") + ">" +
+                esc(a.nombre) + "</option>").join("") + "</select></div>";
+        }).join("") + "</div>";
+    } else {
+      html += '<div class="campo"><label for="mp-catfija">Categoría para todos</label>' +
+        '<select class="entrada" id="mp-catfija">' +
+          catsApp.map(a => '<option value="' + a.id + '">' + esc(a.nombre) + "</option>").join("") +
+        "</select><p class=\"campo__ayuda\">Tu archivo no trae categorías. Puedes cambiarlas después.</p></div>";
+    }
+  }
+
+  if (IMP.mapa.ambito < 0) {
+    html += '<div class="campo"><label>¿Personal o negocio?</label>' +
+      '<div class="segmentos" role="group" aria-label="Ámbito">' +
+        [["personal", "Personal"], ["negocio", "Negocio"]].map(([k, n]) =>
+          '<button type="button" data-ambfijo="' + k + '" aria-pressed="' + (k === IMP.ambitoFijo) + '">' +
+          n + "</button>").join("") + "</div></div>";
+  }
+
+  html += '<div class="btn-grupo"><button class="btn btn--fantasma" type="button" id="dt-atras">Atrás</button>' +
+    '<button class="btn" type="button" id="dt-sig">Ver resumen</button></div>';
+
+  cuerpoPaso(caja, 4, "Últimos detalles", html);
+
+  caja.querySelector("#paso-cuerpo").addEventListener("click", e => {
+    const b = e.target.closest("[data-ambfijo]");
+    if (!b) return;
+    IMP.ambitoFijo = b.dataset.ambfijo;
+    caja.querySelectorAll("[data-ambfijo]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  });
+  caja.querySelector("#dt-atras").addEventListener("click", () => pasoMapeo(caja));
+  caja.querySelector("#dt-sig").addEventListener("click", () => {
+    const m = caja.querySelector("#mp-mes");
+    if (m) IMP.mes = m.value || IMP.mes;
+    caja.querySelectorAll("[data-cat]").forEach(s => { IMP.mapaCats[s.dataset.cat] = s.value; });
+    const fija = caja.querySelector("#mp-catfija");
+    if (fija) IMP.catFija = fija.value;
+    pasoResumen(caja);
+  });
+}
+
+/* --- Paso 5: vista previa y confirmación --- */
+function construirImportacion() {
+  const cuerpo = IMP.filas.slice(IMP.iEnc + 1);
+  const porOmision = IMP.destino === "ingreso" ? "otro_in" : "otros";
+  const crudos = [];
+  let descartados = 0;
+
+  cuerpo.forEach(f => {
+    const fila = f || [];
+    const monto = interpretarMonto(fila[IMP.mapa.monto]);
+    if (!monto) { if (String(fila[IMP.mapa.monto] || "").trim()) descartados++; return; }
+    const concepto = IMP.mapa.concepto >= 0 ? String(fila[IMP.mapa.concepto] || "").trim() : "";
+    const catTexto = IMP.mapa.categoria >= 0 ? String(fila[IMP.mapa.categoria] || "").trim() : "";
+    let ambito = IMP.ambitoFijo;
+    if (IMP.mapa.ambito >= 0) {
+      const v = String(fila[IMP.mapa.ambito] || "").trim().toLowerCase();
+      if (v) ambito = /negoc|empres|business/.test(v) ? "negocio" : "personal";
+    }
+    crudos.push({
+      fechaOriginal: IMP.mapa.fecha >= 0 ? interpretarFecha(fila[IMP.mapa.fecha]) : null,
+      monto, concepto,
+      categoria: catTexto ? (IMP.mapaCats[catTexto] || porOmision) : (IMP.catFija || porOmision),
+      ambito
+    });
+  });
+
+  // Reparto de fechas solo para los que no la traen.
+  const sinFecha = crudos.filter(c => !c.fechaOriginal);
+  const repartidas = repartirFechas(sinFecha.length, IMP.mes);
+  let k = 0;
+  crudos.forEach(c => { c.fecha = c.fechaOriginal || repartidas[k++]; });
+
+  if (IMP.destino === "cobrar") {
+    return { registros: crudos, duplicados: [], descartados, esCobrar: true };
+  }
+
+  const existentes = new Set(datos.movimientos.map(claveMovimiento));
+  const registros = [], duplicados = [];
+  crudos.forEach(c => {
+    const mov = {
+      id: id(), tipo: IMP.destino === "ingreso" ? "ingreso" : "gasto",
+      monto: c.monto, categoria: c.categoria, fecha: c.fecha,
+      metodo: "", nota: c.concepto, ambito: c.ambito, creado: Date.now()
+    };
+    const clave = claveMovimiento(mov);
+    if (existentes.has(clave)) duplicados.push(mov);
+    else { existentes.add(clave); registros.push(mov); }
+  });
+  return { registros, duplicados, descartados, esCobrar: false };
+}
+
+function pasoResumen(caja) {
+  const r = construirImportacion();
+  IMP.listos = r;
+  const suma = r.registros.reduce((s, x) => s + x.monto, 0);
+  const etq = IMP.destino === "ingreso" ? "ingresos" : IMP.destino === "cobrar" ? "cuentas por cobrar" : "gastos";
+
+  let html = '<div class="tarjeta" style="margin:0 0 var(--s-4);box-shadow:none">' +
+    '<div style="display:flex;justify-content:space-between;padding:var(--s-2) 0;font-size:15px">' +
+      "<span>Se van a importar</span><strong class=\"num\">" + r.registros.length + " " + etq + "</strong></div>" +
+    '<div style="display:flex;justify-content:space-between;padding:var(--s-2) 0;border-top:1px solid var(--linea);font-size:15px">' +
+      "<span>Suma</span><strong class=\"num\">" + fmt(suma) + "</strong></div>" +
+    (r.duplicados.length
+      ? '<div style="display:flex;justify-content:space-between;padding:var(--s-2) 0;border-top:1px solid var(--linea);font-size:15px;color:var(--aviso)">' +
+        "<span>Ya existían, se omiten</span><strong class=\"num\">" + r.duplicados.length + "</strong></div>"
+      : "") +
+    (r.descartados
+      ? '<div style="display:flex;justify-content:space-between;padding:var(--s-2) 0;border-top:1px solid var(--linea);font-size:15px;color:var(--tinta-suave)">' +
+        "<span>Filas sin monto válido</span><strong class=\"num\">" + r.descartados + "</strong></div>"
+      : "") +
+    "</div>";
+
+  if (!r.registros.length) {
+    html += '<div class="nota nota--alerta">' + svg("alerta", 18) +
+      "<div>No hay nada que importar. Revisa el mapeo de columnas en el paso anterior.</div></div>";
+  } else {
+    html += '<p style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-suave);' +
+      'margin:0 0 var(--s-2)">Primeros registros</p><ul class="lista" style="margin-bottom:var(--s-4)">' +
+      r.registros.slice(0, 6).map(x =>
+        '<li class="reg"><div class="reg__cuerpo">' +
+          '<div class="reg__nombre">' + esc(x.nota || x.concepto || nombreCategoria(x.categoria)) + "</div>" +
+          '<div class="reg__meta">' + esc(FMT_DIA.format(aFecha(x.fecha))) +
+            (IMP.destino !== "cobrar" ? " · " + esc(nombreCategoria(x.categoria)) : "") +
+            (usaAmbitos() || IMP.mapa.ambito >= 0 ? " · " + (x.ambito === "negocio" ? "Negocio" : "Personal") : "") +
+          "</div></div>" +
+          '<span class="reg__monto num">' + fmt(x.monto) + "</span></li>").join("") +
+      "</ul>";
+    if (IMP.mapa.fecha < 0) {
+      html += '<div class="nota">' + svg("info", 18) +
+        "<div>Las fechas se repartieron a lo largo del mes porque el archivo no las traía. " +
+        "Son aproximadas: sirven para el orden y los totales, no para saber qué pasó cada día.</div></div>";
+    }
+  }
+
+  html += '<div class="btn-grupo" style="margin-top:var(--s-5)">' +
+    '<button class="btn btn--fantasma" type="button" id="rs-atras">Atrás</button>' +
+    (r.registros.length ? '<button class="btn" type="button" id="rs-confirmar">Importar</button>' : "") +
+    "</div>";
+
+  cuerpoPaso(caja, 5, "Revisa antes de importar", html);
+  caja.querySelector("#rs-atras").addEventListener("click", () => pasoDetalles(caja));
+  const conf = caja.querySelector("#rs-confirmar");
+  if (conf) conf.addEventListener("click", async () => {
+    const ids = [];
+    if (IMP.listos.esCobrar) {
+      IMP.listos.registros.forEach(c => {
+        const nuevo = {
+          id: id(), concepto: c.concepto || "Sin concepto", monto: c.monto,
+          tipo: "", ambito: c.ambito, fecha: c.fecha, cobrado: false, fechaCobro: null
+        };
+        ids.push(nuevo.id);
+        datos.porCobrar.push(nuevo);
+      });
+    } else {
+      IMP.listos.registros.forEach(m => { ids.push(m.id); datos.movimientos.push(m); });
+    }
+    if (IMP.mapa.ambito >= 0 && !usaAmbitos()) datos.perfil.usaAmbitos = true;
+    datos.ultimaImportacion = { ids, cuando: Date.now(), esCobrar: !!IMP.listos.esCobrar };
+    await persistir();
+    cerrarHoja();
+    avisar("Se importaron " + ids.length + " registros");
+    pintar();
+  });
+}
+
+/** Deshace la última importación, mientras no se haya hecho otra. */
+async function deshacerImportacion() {
+  const u = datos.ultimaImportacion;
+  if (!u || !u.ids.length) return;
+  const set = new Set(u.ids);
+  if (u.esCobrar) datos.porCobrar = datos.porCobrar.filter(c => !set.has(c.id));
+  else datos.movimientos = datos.movimientos.filter(m => !set.has(m.id));
+  datos.ultimaImportacion = null;
+  await persistir();
+  avisar("Importación deshecha");
+  pintar();
 }
 
 /* ----------------------------------------------------------------
@@ -2845,7 +3713,8 @@ document.addEventListener("click", async e => {
 
   const abrir = t.closest("[data-abrir]");
   if (abrir) {
-    ({ movimiento: hojaMovimiento, bolsas: hojaBolsas, meta: hojaMeta, deuda: hojaDeuda })[abrir.dataset.abrir]();
+    ({ movimiento: hojaMovimiento, bolsas: hojaBolsas, meta: hojaMeta, deuda: hojaDeuda,
+       cobrar: hojaCobrar })[abrir.dataset.abrir]();
     return;
   }
 
@@ -2905,6 +3774,44 @@ document.addEventListener("click", async e => {
   }
 
   if (t.closest("#campana")) { hojaAlertas(); return; }
+  if (t.closest("#btn-importar")) { hojaImportar(); return; }
+  if (t.closest("#btn-deshacer-imp")) {
+    confirmar("Deshacer importación",
+      "Se van a eliminar los " + datos.ultimaImportacion.ids.length +
+      " registros de la última importación. Lo capturado a mano no se toca.",
+      "Sí, deshacer", deshacerImportacion);
+    return;
+  }
+
+  const amb = t.closest("[data-ambito]");
+  if (amb) { datos.perfil.ambitoActivo = amb.dataset.ambito; await persistir(); pintar(); return; }
+
+  const usa = t.closest("[data-usaamb]");
+  if (usa) {
+    datos.perfil.usaAmbitos = usa.dataset.usaamb === "1";
+    if (!datos.perfil.usaAmbitos) datos.perfil.ambitoActivo = "todo";
+    await persistir(); pintar(); return;
+  }
+
+  const bal = t.closest("[data-balance]");
+  if (bal) { datos.pestanaBalance = bal.dataset.balance; await persistir(); pintar(); return; }
+
+  const cob = t.closest("[data-cobrado]");
+  if (cob) { hojaMarcarCobrado(cob.dataset.cobrado); return; }
+
+  const bcob = t.closest("[data-borrar-cobro]");
+  if (bcob) {
+    const c = datos.porCobrar.find(x => x.id === bcob.dataset.borrarCobro);
+    if (!c) return;
+    confirmar("Quitar cuenta por cobrar",
+      'Se eliminará "' + c.concepto + '" por ' + fmt(c.monto) + ". No se puede deshacer.",
+      "Sí, quitar",
+      async () => {
+        datos.porCobrar = datos.porCobrar.filter(x => x.id !== c.id);
+        await persistir(); avisar("Eliminada");
+      });
+    return;
+  }
   if (t.closest("#fab")) { hojaMovimiento(); return; }
   if (t.closest("#btn-descargas")) { hojaDescargas(); return; }
   if (t.closest("#btn-exportar")) { await exportarJSON(); return; }
