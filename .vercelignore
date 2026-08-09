@@ -1,0 +1,10 @@
+﻿# Archivos que viven en el repositorio pero NO se publican en la web.
+docs/
+GUIA-PUBLICAR.md
+RECOMENDACIONES.md
+COMANDOS-GIT.md
+Dockerfile
+Caddyfile
+.DS_Store
+Thumbs.db
+*.log

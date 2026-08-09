@@ -264,6 +264,38 @@ textarea.entrada{padding:var(--s-3);min-height:72px;resize:vertical}
 }
 .fab:hover{background:#374A2D}
 
+/* ---------- Campana de alertas ---------- */
+.btn-campana{position:relative}
+.campana__num{
+  position:absolute;top:-3px;right:-3px;min-width:19px;height:19px;padding:0 5px;
+  border-radius:var(--r-full);background:var(--alerta);color:#fff;
+  font-size:11px;font-weight:700;line-height:19px;text-align:center;
+  border:2px solid var(--superficie);
+}
+.campana__num[data-nivel="atencion"]{background:var(--aviso)}
+.campana__num[hidden]{display:none}
+
+.alerta{border-left:3px solid var(--verde-hoja);padding:0 0 0 var(--s-4);margin-bottom:var(--s-5)}
+.alerta:last-of-type{margin-bottom:0}
+.alerta[data-nivel="critica"]{border-left-color:var(--alerta)}
+.alerta[data-nivel="atencion"]{border-left-color:var(--aviso)}
+.alerta__cab{display:flex;align-items:center;gap:var(--s-2);margin-bottom:4px}
+.alerta__titulo{font-size:15px;font-weight:600}
+.alerta__texto{font-size:14px;color:var(--tinta-suave);margin:0}
+.alerta__dato{
+  display:inline-block;margin-top:var(--s-2);font-size:13px;font-weight:600;
+  font-variant-numeric:tabular-nums;color:var(--verde-bosque);
+}
+.alerta[data-nivel="critica"] .alerta__dato{color:var(--alerta)}
+.alerta[data-nivel="atencion"] .alerta__dato{color:var(--aviso)}
+
+.medidor{height:12px;background:var(--verde-claro);border-radius:var(--r-full);overflow:hidden;position:relative;margin:var(--s-3) 0}
+.medidor__relleno{height:100%;border-radius:var(--r-full);background:var(--verde-bosque)}
+.medidor__relleno[data-nivel="atencion"]{background:var(--aviso)}
+.medidor__relleno[data-nivel="critica"]{background:var(--alerta)}
+.medidor__marca{position:absolute;top:-3px;width:2px;height:18px;background:var(--tinta-suave);opacity:.55}
+.escala{display:flex;justify-content:space-between;font-size:11px;color:var(--tinta-suave);margin-top:2px}
+
 /* ---------- Avisos ---------- */
 .aviso-flotante{
   position:fixed;left:50%;transform:translateX(-50%);
@@ -379,7 +411,36 @@ button,.ficha,.btn,label[for],.nav__btn,.reg__borrar{
 .rescate ol{text-align:left;max-width:34ch;margin:0 auto;padding-left:var(--s-5);font-size:15px}
 .rescate li{margin-bottom:var(--s-2)}
 
-@media print{ .nav,.fab,.btn,.reg__borrar{display:none !important} body{padding-bottom:0} }
+/* ============================================================
+   REPORTE IMPRIMIBLE — se usa para "Guardar como PDF"
+   ============================================================ */
+.impresion{display:none}
+.rep{font-family:var(--sans);color:var(--tinta)}
+.rep__cab{border-bottom:2px solid var(--verde-bosque);padding-bottom:10px;margin-bottom:18px}
+.rep__marca{font-size:13px;font-weight:700;letter-spacing:.22em;color:var(--verde-bosque);text-transform:uppercase}
+.rep__ac{font-size:9px;letter-spacing:.3em;color:var(--verde-hoja)}
+.rep__titulo{font-size:19px;font-weight:600;margin-top:10px}
+.rep__meta{font-size:12px;color:var(--tinta-suave);margin-top:4px}
+.rep__resumen{display:flex;gap:24px;margin:0 0 18px;padding:12px 0;border-bottom:1px solid var(--linea)}
+.rep__resumen div{flex:1}
+.rep__resumen dt{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--tinta-suave)}
+.rep__resumen dd{margin:2px 0 0;font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;font-family:var(--serif)}
+.rep h3{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-suave);margin:18px 0 8px}
+.rep table{width:100%;border-collapse:collapse;font-size:12px}
+.rep th{text-align:left;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--tinta-suave);
+  border-bottom:1px solid var(--linea);padding:6px 8px 6px 0}
+.rep td{padding:6px 8px 6px 0;border-bottom:1px solid #F0F1EA;vertical-align:top}
+.rep td.der,.rep th.der{text-align:right;font-variant-numeric:tabular-nums;padding-right:0}
+.rep tr{break-inside:avoid}
+.rep__pie{margin-top:22px;padding-top:10px;border-top:1px solid var(--linea);font-size:10px;color:var(--tinta-suave)}
+
+@media print{
+  body{background:#fff;padding:0 !important;margin:0}
+  .encabezado,.nav,.fab,.aviso-flotante,.velo,#vista,.pie,noscript{display:none !important}
+  .impresion{display:block !important}
+  .rep__cab,.rep__resumen{break-inside:avoid}
+  @page{margin:14mm}
+}
 </style>
 </head>
 <body>
@@ -394,7 +455,13 @@ button,.ficha,.btn,label[for],.nav__btn,.reg__borrar{
       <span class="marca__ac">A . C .</span>
     </span>
   </div>
-  <button class="btn-ajustes" type="button" data-ir="ajustes" aria-label="Ajustes y respaldo">
+  <button class="btn-ajustes btn-campana" type="button" id="campana" aria-label="Alertas y avisos" hidden>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>
+    </svg>
+    <span class="campana__num" id="campana-num" hidden></span>
+  </button>
+  <button class="btn-ajustes" type="button" data-ir="ajustes" aria-label="Ajustes y respaldo" id="btn-config" hidden>
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
       <circle cx="12" cy="12" r="3"/>
       <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.6 1.7 1.7 0 0 0-1.9.4l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1.1 1.7 1.7 0 0 0-.4-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/>
@@ -436,6 +503,8 @@ button,.ficha,.btn,label[for],.nav__btn,.reg__borrar{
     <path d="M12 5v14M5 12h14"/>
   </svg>
 </button>
+
+<div class="impresion" id="impresion" aria-hidden="true"></div>
 
 <nav class="nav" id="nav" aria-label="Secciones"></nav>
 
@@ -650,7 +719,7 @@ function limitesPeriodo(ancla, ciclo, desplazamiento) {
     const fin = sumaDias(new Date(a.getFullYear(), a.getMonth() + desplazamiento + 1, a.getDate()), -1);
     return { inicio, fin };
   }
-  const largo = ciclo === "semanal" ? 7 : 14;
+  const largo = ciclo === "diario" ? 1 : ciclo === "semanal" ? 7 : 14;
   const inicio = sumaDias(a, largo * desplazamiento);
   return { inicio, fin: sumaDias(inicio, largo - 1) };
 }
@@ -666,18 +735,35 @@ function periodoActual(ancla, ciclo) {
     if (t.getDate() < a.getDate()) n--;
     return n;
   }
-  const largo = ciclo === "semanal" ? 7 : 14;
+  const largo = ciclo === "diario" ? 1 : ciclo === "semanal" ? 7 : 14;
   return Math.floor(diasEntre(a, t) / largo);
 }
 
 /** Periodos por año, para prorratear metas de ahorro. */
 function periodosPorAnio(ciclo) {
-  return ciclo === "semanal" ? 52 : ciclo === "quincenal" ? 26 : 12;
+  return ciclo === "diario" ? 365 : ciclo === "semanal" ? 52 : ciclo === "quincenal" ? 26 : 12;
 }
 
 function nombreCiclo(ciclo) {
-  return ciclo === "semanal" ? "semana" : ciclo === "quincenal" ? "quincena" : "mes";
+  return ciclo === "diario" ? "día" : ciclo === "semanal" ? "semana"
+       : ciclo === "quincenal" ? "quincena" : "mes";
 }
+
+/**
+ * Demostrativo con el género correcto: "este día" / "esta semana".
+ * Evita textos como "de esta día" al agregarse el ciclo diario.
+ * @param {string} ciclo @param {boolean} [mayus=false]
+ * @returns {string}
+ */
+function articuloCiclo(ciclo, mayus) {
+  const t = ciclo === "diario" ? "este día"
+          : ciclo === "semanal" ? "esta semana"
+          : ciclo === "quincenal" ? "esta quincena" : "este mes";
+  return mayus ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+}
+
+/** Cuántos periodos del ciclo caben en un mes; sirve para anualizar cifras. */
+function periodosPorMes(ciclo) { return periodosPorAnio(ciclo) / 12; }
 
 /** Movimientos dentro del periodo indicado. */
 function movimientosDe(desplazamiento) {
@@ -768,6 +854,241 @@ function svg(clave, t) {
    6. VISTAS
    ---------------------------------------------------------------- */
 
+
+/* ----------------------------------------------------------------
+   6-bis. CAPACIDAD DE ENDEUDAMIENTO Y MOTOR DE ALERTAS
+
+   Umbrales tomados de la educación financiera mexicana:
+
+   - Asociación de Bancos de México (abm.org.mx): la capacidad de
+     endeudamiento se calcula sobre el ingreso disponible una vez
+     cubiertos los gastos que no se pueden aplazar, y se recomienda
+     que el pago de deudas quede entre 30% y 40% de ese disponible.
+   - Regla del 30% sobre ingreso neto: el pago mensual comprometido
+     en deudas no debería rebasar 30% del ingreso neto. Banxico, en
+     su material de educación financiera, ubica una capacidad de pago
+     como alta cuando el compromiso rebasa ese 30% del ingreso neto.
+   - Por encima de 40% del ingreso se considera sobreendeudamiento:
+     cualquier imprevisto se cubre con más deuda.
+
+   Se aplica el criterio más conservador de los dos: el que resulte
+   menor entre 30% del disponible y 30% del ingreso neto.
+   ---------------------------------------------------------------- */
+
+const DIAS_MES = 30.4;
+
+/**
+ * Estima el ingreso y el gasto esencial mensuales a partir de lo
+ * capturado, con el estimado declarado como respaldo.
+ * @returns {{ingreso:number, esenciales:number, base:string}}
+ */
+function baseMensual() {
+  const CAT_ESENCIALES = ["comida", "casa", "transporte", "salud", "escuela"];
+  const fechas = datos.movimientos.map(m => m.fecha).sort();
+  const estimado = (datos.perfil.ingresoEstimado || 0) * periodosPorMes(datos.perfil.ciclo);
+
+  if (!fechas.length) return { ingreso: estimado, esenciales: 0, base: "estimado" };
+
+  const desde = aISO(sumaDias(hoy(), -89));
+  const inicio = fechas[0] > desde ? fechas[0] : desde;
+  const diasHist = Math.max(1, diasEntre(aFecha(inicio), hoy()) + 1);
+  const movs = datos.movimientos.filter(m => m.fecha >= inicio);
+
+  const ingReal = movs.filter(m => m.tipo === "ingreso").reduce((s, m) => s + m.monto, 0) / diasHist * DIAS_MES;
+  const esenReal = movs.filter(m => m.tipo === "gasto" && CAT_ESENCIALES.includes(m.categoria))
+                       .reduce((s, m) => s + m.monto, 0) / diasHist * DIAS_MES;
+
+  // Con poco historial, extrapolar unos cuantos días a un mes completo
+  // distorsiona el cálculo: dos días de despensa se convertirían en una
+  // cifra mensual absurda. Por eso, debajo de 14 días de registro se
+  // prefiere lo que la persona declaró y las bolsas que ya definió.
+  const usarReal = diasHist >= 30 && ingReal > 0;
+  const bolsasEsenciales = CAT_ESENCIALES.reduce((s, c) => s + (datos.presupuesto[c] || 0), 0) *
+                           periodosPorMes(datos.perfil.ciclo);
+  return {
+    ingreso: usarReal ? ingReal : (estimado || ingReal),
+    esenciales: diasHist >= 14 ? esenReal : bolsasEsenciales,
+    base: usarReal ? "registrado" : (estimado ? "estimado" : "registrado"),
+    dias: diasHist
+  };
+}
+
+/**
+ * Diagnóstico de endeudamiento conforme a los umbrales citados arriba.
+ * @returns {{ingreso:number, esenciales:number, disponible:number,
+ *            comprometido:number, recomendado:number, maximo:number,
+ *            margen:number, razon:number, nivel:string, base:string}}
+ */
+function capacidadEndeudamiento() {
+  const b = baseMensual();
+  const disponible = Math.max(0, b.ingreso - b.esenciales);
+  const comprometido = datos.deudas.reduce((s, d) => s + (d.pagoMensual || 0), 0);
+
+  const porDisponible = disponible * 0.30;      // criterio ABM, extremo conservador
+  const porIngreso = b.ingreso * 0.30;          // regla del 30% sobre ingreso neto
+  const recomendado = Math.max(0, Math.min(porDisponible, porIngreso));
+  const maximo = Math.max(0, Math.min(disponible * 0.40, b.ingreso * 0.40));
+  const razon = b.ingreso > 0 ? comprometido / b.ingreso : 0;
+
+  let nivel = "sano";
+  if (!b.ingreso) nivel = "sin_datos";
+  else if (razon > 0.40) nivel = "critica";
+  else if (razon > 0.30) nivel = "atencion";
+  else if (comprometido > recomendado && comprometido > 0) nivel = "atencion";
+
+  return {
+    ingreso: b.ingreso, esenciales: b.esenciales, disponible, comprometido,
+    recomendado, maximo, margen: recomendado - comprometido, razon, nivel,
+    base: b.base, dias: b.dias || 0
+  };
+}
+
+/**
+ * Construye la lista de alertas vigentes, ordenada por gravedad.
+ * @returns {Array<{nivel:'critica'|'atencion'|'info', titulo:string, texto:string, dato?:string, ir?:string}>}
+ */
+function calcularAlertas() {
+  const A = [];
+  const t = totales(desfase);
+  const cap = capacidadEndeudamiento();
+  const ciclo = nombreCiclo(datos.perfil.ciclo);
+
+  /* --- Endeudamiento --- */
+  if (cap.nivel === "critica") {
+    A.push({ nivel: "critica", titulo: "Estás sobreendeudada o sobreendeudado", ir: "deudas",
+      dato: Math.round(cap.razon * 100) + "% de tu ingreso se va en pagar deudas",
+      texto: "Por encima de 40% cualquier imprevisto se termina cubriendo con más deuda. " +
+             "No tomes crédito nuevo y acércate a la asociación para revisar tu plan de pago." });
+  } else if (cap.nivel === "atencion" && cap.razon > 0.30) {
+    A.push({ nivel: "atencion", titulo: "Tu carga de deuda pasó del límite sano", ir: "deudas",
+      dato: Math.round(cap.razon * 100) + "% de tu ingreso comprometido",
+      texto: "La recomendación es no rebasar 30% del ingreso neto. Todavía tienes margen de maniobra " +
+             "si ajustas ahora, antes de tomar cualquier crédito nuevo." });
+  } else if (cap.nivel === "atencion") {
+    A.push({ nivel: "atencion", titulo: "Tus pagos rebasan tu capacidad calculada", ir: "deudas",
+      dato: "Pagas " + fmt(cap.comprometido, true) + " y tu capacidad sana es " + fmt(cap.recomendado, true),
+      texto: "Aunque el porcentaje sobre tu ingreso todavía no es alto, después de cubrir tus gastos " +
+             "esenciales te queda poco margen para imprevistos." });
+  }
+
+  /* --- Pagos que no cubren ni intereses --- */
+  datos.deudas.forEach(d => {
+    const interesMes = d.saldo * ((d.tasa || 0) / 100 / 12);
+    if (d.tasa && (d.pagoMensual || 0) <= interesMes) {
+      A.push({ nivel: "critica", titulo: "Una deuda está creciendo, no bajando", ir: "deudas",
+        dato: esc(d.nombre) + ": intereses de " + fmt(interesMes, true) + " al mes",
+        texto: "Lo que pagas no alcanza a cubrir los intereses, así que el saldo sube cada mes " +
+               "aunque pagues puntual. Esta deuda necesita renegociarse." });
+    }
+  });
+
+  /* --- Bolsas --- */
+  const rebasadas = [], cerca = [];
+  Object.keys(datos.presupuesto).forEach(k => {
+    const tope = datos.presupuesto[k], usado = t.porCategoria[k] || 0;
+    if (!tope) return;
+    if (usado > tope) rebasadas.push(nombreCategoria(k));
+    else if (usado / tope >= 0.8) cerca.push(nombreCategoria(k));
+  });
+  if (rebasadas.length) {
+    A.push({ nivel: "atencion", titulo: "Rebasaste " + (rebasadas.length === 1 ? "una bolsa" : rebasadas.length + " bolsas"),
+      ir: "bolsas", dato: rebasadas.join(", "),
+      texto: "Ya gastaste más de lo que te habías propuesto en " + (rebasadas.length === 1 ? "esta categoría" : "estas categorías") +
+             " durante " + articuloCiclo(datos.perfil.ciclo) + "." });
+  }
+  if (cerca.length) {
+    A.push({ nivel: "info", titulo: "Bolsas por acabarse", ir: "bolsas", dato: cerca.join(", "),
+      texto: "Llevas 80% o más de lo que habías asignado. Todavía puedes frenar." });
+  }
+
+  /* --- Resultado del periodo --- */
+  if (t.gastos > t.ingresos && t.ingresos > 0) {
+    A.push({ nivel: "atencion", titulo: "Gastaste más de lo que entró", ir: "resumen",
+      dato: "Faltaron " + fmt(t.gastos - t.ingresos, true) + " en " + articuloCiclo(datos.perfil.ciclo),
+      texto: "Un periodo así se cubre con ahorro o con deuda. Si se repite varios periodos seguidos, " +
+             "el problema no es un gasto suelto sino el nivel de gasto." });
+  }
+
+  /* --- Ahorro --- */
+  if (t.ingresos > 0 && t.saldo >= 0 && t.saldo / t.ingresos < 0.10) {
+    A.push({ nivel: "info", titulo: "Tu ahorro va por debajo del 10%", ir: "metas",
+      dato: "Estás guardando " + Math.round(t.saldo / t.ingresos * 100) + "% de lo que entra",
+      texto: "El 10% es el mínimo que se recomienda para poder formar un fondo de imprevistos." });
+  }
+
+  /* --- Captura --- */
+  const ultima = datos.movimientos.map(m => m.fecha).sort().pop();
+  if (ultima) {
+    const dias = diasEntre(aFecha(ultima), hoy());
+    const umbral = datos.perfil.ciclo === "diario" ? 2 : 5;
+    if (dias >= umbral) {
+      A.push({ nivel: "info", titulo: "Llevas " + dias + " días sin registrar nada",
+        texto: "Los gastos que no se anotan son justo los que descuadran el mes. " +
+               "Ponte al corriente mientras los recuerdas." });
+    }
+  }
+
+  /* --- Metas atrasadas --- */
+  datos.metas.forEach(m => {
+    if (!m.fechaMeta || m.ahorrado >= m.objetivo) return;
+    const cuota = cuotaMeta(m);
+    if (cuota > 0 && t.saldo >= 0 && cuota > t.saldo) {
+      A.push({ nivel: "info", titulo: "La meta \u201c" + m.nombre + "\u201d va apretada", ir: "metas",
+        dato: "Tendrías que apartar " + fmt(cuota, true) + " cada " + ciclo,
+        texto: "Es más de lo que te está sobrando. Conviene mover la fecha o bajar el monto " +
+               "antes de abandonarla." });
+    }
+  });
+
+  /* --- Respaldo --- */
+  const dr = diasSinRespaldo();
+  if (datos.movimientos.length >= 8 && (dr === null || dr > 30)) {
+    A.push({ nivel: "info", titulo: "Respaldo pendiente", ir: "ajustes",
+      texto: dr === null ? "Nunca has descargado un respaldo de tu información."
+                         : "Tu último respaldo fue hace " + dr + " días." });
+  }
+
+  const orden = { critica: 0, atencion: 1, info: 2 };
+  return A.sort((a, b) => orden[a.nivel] - orden[b.nivel]);
+}
+
+/** Pinta el contador de la campana. */
+function pintarCampana() {
+  const hay = !!datos.perfil;
+  document.getElementById("campana").hidden = !hay;
+  document.getElementById("btn-config").hidden = !hay;
+  if (!hay) return;
+  const A = calcularAlertas();
+  const graves = A.filter(a => a.nivel !== "info").length;
+  const num = document.getElementById("campana-num");
+  if (!A.length) { num.hidden = true; return; }
+  num.hidden = false;
+  num.textContent = String(graves || A.length);
+  num.dataset.nivel = A.some(a => a.nivel === "critica") ? "critica" : graves ? "atencion" : "info";
+  if (!graves) num.dataset.nivel = "atencion";
+}
+
+/** Hoja con el detalle de las alertas vigentes. */
+function hojaAlertas() {
+  const A = calcularAlertas();
+  const cuerpo = A.length
+    ? A.map(a =>
+        '<div class="alerta" data-nivel="' + a.nivel + '">' +
+          '<div class="alerta__cab">' +
+            (a.nivel === "info" ? svg("info", 17) : svg("alerta", 17)) +
+            '<span class="alerta__titulo">' + esc(a.titulo) + "</span>" +
+          "</div>" +
+          '<p class="alerta__texto">' + esc(a.texto) + "</p>" +
+          (a.dato ? '<span class="alerta__dato">' + esc(a.dato) + "</span>" : "") +
+          (a.ir ? '<div style="margin-top:var(--s-3)"><button class="btn btn--fantasma" type="button" ' +
+                  'data-ir="' + a.ir + '">Ver</button></div>' : "") +
+        "</div>").join("")
+    : '<div class="vacio" style="padding:var(--s-5) 0"><div class="vacio__hoja">' + svg("hoja", 36) + "</div>" +
+      '<p class="vacio__titulo">Nada que revisar</p>' +
+      '<p class="vacio__texto">No hay bolsas rebasadas, tu carga de deuda está en rango y vas al corriente con tus registros.</p></div>';
+  abrirHoja("Alertas", cuerpo);
+}
+
 const SECCIONES = [
   { id: "resumen",     rotulo: "Resumen",  icono: "resumen" },
   { id: "movimientos", rotulo: "Movs",     icono: "lista" },
@@ -792,7 +1113,7 @@ function pintarNav() {
 
 function pintar() {
   const main = document.getElementById("vista");
-  if (!datos.perfil) { main.innerHTML = vistaBienvenida(); pintarNav(); pintarPie(); return; }
+  if (!datos.perfil) { main.innerHTML = vistaBienvenida(); pintarNav(); pintarPie(); pintarCampana(); return; }
 
   const mapa = {
     resumen: vistaResumen,
@@ -809,6 +1130,7 @@ function pintar() {
   else main.removeAttribute("data-columnas");
   pintarNav();
   pintarPie();
+  pintarCampana();
 }
 
 function pintarPie() {
@@ -860,7 +1182,7 @@ function vistaBienvenida() {
 }
 
 function ciclosHTML(actual) {
-  return ["semanal", "quincenal", "mensual"].map(c =>
+  return ["diario", "semanal", "quincenal", "mensual"].map(c =>
     '<button type="button" class="seg-ciclo" data-ciclo="' + c + '" aria-pressed="' + (c === actual) + '">' +
     c.charAt(0).toUpperCase() + c.slice(1) + "</button>"
   ).join("");
@@ -933,6 +1255,16 @@ function vistaResumen() {
   }
   html += "</div>";
 
+  const dias = diasSinRespaldo();
+  if (datos.movimientos.length >= 8 && (dias === null || dias > 30)) {
+    html += '<div class="tarjeta"><div class="nota">' + svg("info", 18) +
+      "<div><strong>Guarda un respaldo.</strong> " +
+      (dias === null ? "Todavía no descargas ninguno." : "El último fue hace " + dias + " días.") +
+      " Si cambias de teléfono, es lo único que te devuelve tu historial.</div></div>" +
+      '<button class="btn btn--fantasma btn--bloque" type="button" data-ir="ajustes" ' +
+      'style="margin-top:var(--s-4)">Ir a respaldo</button></div>';
+  }
+
   const proximas = datos.metas.slice(0, 2);
   if (proximas.length) {
     html += '<div class="tarjeta"><h2 class="tarjeta__titulo">Tus metas</h2>' +
@@ -1002,7 +1334,7 @@ function vistaBolsas() {
   let html =
     "<h1 class=\"sr-only\">Bolsas de gasto</h1>" +
     '<div class="tarjeta">' +
-      '<h2 class="tarjeta__titulo">Tus bolsas de esta ' + ciclo + "</h2>" +
+      '<h2 class="tarjeta__titulo">Tus bolsas de ' + articuloCiclo(datos.perfil.ciclo) + "</h2>" +
       '<div class="nota">' + svg("info", 18) +
         "<div>Una bolsa es cuánto decides gastar en algo. Cuando se acaba, se acabó. " +
         "Repartiste <strong>" + fmt(asignado, true) + "</strong>" +
@@ -1147,10 +1479,69 @@ function planDeudas(deudas, estrategia) {
   return { orden: lista, meses, intereses: Math.round(intereses) };
 }
 
+
+/**
+ * Tarjeta de capacidad de endeudamiento con el medidor y la marca
+ * del 30% recomendado sobre el ingreso.
+ * @returns {string} marcado HTML
+ */
+function tarjetaCapacidad() {
+  const c = capacidadEndeudamiento();
+  if (!c.ingreso) {
+    return '<div class="tarjeta"><h2 class="tarjeta__titulo">Capacidad de endeudamiento</h2>' +
+      '<div class="nota">' + svg("info", 18) +
+      "<div>Para calcularla necesito saber cuánto ganas. Registra tus ingresos o captura tu " +
+      "ingreso estimado en Ajustes.</div></div></div>";
+  }
+  const pct = Math.min(100, Math.round(c.razon * 100));
+  const nivel = c.razon > 0.40 ? "critica" : c.razon > 0.30 ? "atencion" : "";
+  const etiqueta = c.razon > 0.40 ? "Sobreendeudamiento"
+                 : c.razon > 0.30 ? "Zona de vigilancia" : "Nivel sano";
+
+  return '<div class="tarjeta">' +
+    '<h2 class="tarjeta__titulo">Capacidad de endeudamiento</h2>' +
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:var(--s-3)">' +
+      '<span style="font-size:15px;font-weight:600">' + etiqueta + "</span>" +
+      '<span class="num" style="font-size:20px;font-weight:600">' + pct + "%</span></div>" +
+    '<div class="medidor"><div class="medidor__relleno" data-nivel="' + nivel + '" style="width:' + pct + '%"></div>' +
+      '<span class="medidor__marca" style="left:30%"></span></div>' +
+    '<div class="escala"><span>0%</span><span>30% recomendado</span><span>100%</span></div>' +
+    '<div style="margin-top:var(--s-5)">' +
+      filaDato("Ingreso mensual " + (c.base === "estimado" ? "estimado" : "registrado"), fmt(c.ingreso, true)) +
+      filaDato("Menos gastos esenciales", "− " + fmt(c.esenciales, true)) +
+      filaDato("Te queda disponible", fmt(c.disponible, true)) +
+      filaDato("Pago de deuda que ya tienes", fmt(c.comprometido, true)) +
+      filaDato("Capacidad sana de pago", fmt(c.recomendado, true)) +
+      filaDato(c.margen >= 0 ? "Margen todavía disponible" : "Excedido por",
+               fmt(Math.abs(c.margen), true)) +
+    "</div>" +
+    '<div class="nota' + (c.margen < 0 ? " nota--alerta" : "") + '" style="margin-top:var(--s-4)">' + svg("info", 18) +
+      "<div>" + (c.margen >= 0
+        ? "Podrías comprometer hasta " + fmt(c.recomendado, true) + " al mes en pagos de deuda sin poner en " +
+          "riesgo tus gastos esenciales. Hoy pagas " + fmt(c.comprometido, true) + "."
+        : "Ya rebasaste tu capacidad sana por " + fmt(Math.abs(c.margen), true) + " al mes. " +
+          "Antes de tomar cualquier crédito nuevo, esta diferencia tiene que bajar.") +
+      "</div></div>" +
+    '<p class="campana-fuente" style="font-size:12px;color:var(--tinta-suave);margin:var(--s-4) 0 0">' +
+      "Se toma el criterio más conservador entre 30% del dinero que te queda después de tus gastos " +
+      "esenciales —como recomienda la Asociación de Bancos de México— y 30% de tu ingreso neto, " +
+      "umbral que la educación financiera de Banxico ubica como límite de una carga alta. " +
+      "Arriba de 40% se considera sobreendeudamiento." +
+      (c.dias < 30 ? " El cálculo mejora conforme registres más días: llevas " + c.dias + "." : "") + "</p>" +
+  "</div>";
+}
+
+/** Renglón de dato: etiqueta a la izquierda, cifra a la derecha. */
+function filaDato(etiqueta, valor) {
+  return '<div style="display:flex;justify-content:space-between;gap:var(--s-3);padding:var(--s-2) 0;' +
+    'border-bottom:1px solid var(--linea);font-size:14px">' +
+    "<span>" + esc(etiqueta) + '</span><span class="num" style="font-weight:600">' + esc(valor) + "</span></div>";
+}
+
 function vistaDeudas() {
   let html = "<h1 class=\"sr-only\">Mis deudas</h1>";
   if (!datos.deudas.length) {
-    return html + '<div class="tarjeta"><div class="vacio"><div class="vacio__hoja">' + svg("deuda", 36) + "</div>" +
+    return html + tarjetaCapacidad() + '<div class="tarjeta"><div class="vacio"><div class="vacio__hoja">' + svg("deuda", 36) + "</div>" +
       '<p class="vacio__titulo">Sin deudas registradas</p>' +
       '<p class="vacio__texto">Si debes algo, anótalo. Ver el número completo asusta menos que no saberlo, y te digo en qué orden pagarlo.</p>' +
       '<button class="btn" type="button" data-abrir="deuda">Registrar una deuda</button></div></div>';
@@ -1174,6 +1565,7 @@ function vistaDeudas() {
   }
   html += "</div>";
 
+  html += tarjetaCapacidad();
   html += '<div class="tarjeta"><h2 class="tarjeta__titulo">Orden sugerido de pago</h2>' +
     '<div class="segmentos" role="group" aria-label="Estrategia de pago" style="margin-bottom:var(--s-4)">' +
       '<button type="button" data-estrategia="nieve" aria-pressed="' + (estrategia === "nieve") + '">La más chica</button>' +
@@ -1204,6 +1596,7 @@ function vistaDeudas() {
 
 function vistaAjustes() {
   const p = datos.perfil;
+  const dias = diasSinRespaldo();
   return (
     "<h1 class=\"sr-only\">Ajustes</h1>" +
     '<div class="tarjeta">' +
@@ -1223,16 +1616,26 @@ function vistaAjustes() {
     "</div>" +
 
     '<div class="tarjeta">' +
+      '<h2 class="tarjeta__titulo">Descargar mis movimientos</h2>' +
+      '<p style="font-size:14px;color:var(--tinta-suave);margin:0 0 var(--s-4)">' +
+        "Elige un periodo y llévatelo en Excel o en PDF: para tu control, para un trámite " +
+        "o para enseñárselo a quien te acompaña en la asociación.</p>" +
+      '<button class="btn btn--bloque" type="button" id="btn-descargas">Elegir periodo y descargar</button>' +
+    "</div>" +
+
+    '<div class="tarjeta">' +
       '<h2 class="tarjeta__titulo">Respaldo</h2>' +
-      '<div class="nota">' + svg("info", 18) +
-        "<div>Tu información vive solo aquí. Si cambias de teléfono o borras el navegador, se pierde. " +
-        "Guarda un respaldo de vez en cuando.</div></div>" +
+      '<div class="nota' + (dias !== null && dias > 30 ? " nota--alerta" : "") + '">' + svg("info", 18) +
+        "<div>" + (
+          dias === null
+            ? "Nunca has descargado un respaldo. Si cambias de teléfono o borras los datos del navegador, se pierde todo lo capturado."
+            : dias > 30
+              ? "Tu último respaldo fue hace " + dias + " días. Vale la pena descargar uno nuevo."
+              : "Tu último respaldo fue hace " + (dias === 0 ? "menos de un día" : dias === 1 ? "un día" : dias + " días") + "."
+        ) + "</div></div>" +
       '<div class="btn-grupo" style="margin-top:var(--s-4)">' +
         '<button class="btn" type="button" id="btn-exportar">Descargar respaldo</button>' +
-        '<button class="btn btn--fantasma" type="button" id="btn-csv">Exportar a Excel</button>' +
-      "</div>" +
-      '<div style="margin-top:var(--s-3)">' +
-        '<label class="btn btn--fantasma btn--bloque" for="entrada-import" style="cursor:pointer">Restaurar un respaldo</label>' +
+        '<label class="btn btn--fantasma" for="entrada-import" style="cursor:pointer">Restaurar respaldo</label>' +
         '<input type="file" id="entrada-import" accept="application/json,.json" class="sr-only">' +
       "</div>" +
     "</div>" +
@@ -1545,23 +1948,836 @@ function descargar(nombreArchivo, contenido, tipoMime) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function exportarJSON() {
+async function exportarJSON() {
+  datos.ultimoRespaldo = Date.now();
+  await persistir();
   descargar("respaldo-finanzas-" + aISO(hoy()) + ".json", JSON.stringify(datos, null, 2), "application/json");
   avisar("Respaldo descargado");
+  pintar();
+}
+
+const FMT_MES = new Intl.DateTimeFormat("es-MX", { month: "long", year: "numeric" });
+
+/**
+ * Traduce una opción de periodo a un rango de fechas concreto.
+ *
+ * @param {'periodo'|'mes'|'mes_pasado'|'trimestre'|'anio'|'todo'|'personalizado'} clave
+ * @param {string} [desde] fecha ISO inicial, solo para 'personalizado'
+ * @param {string} [hasta] fecha ISO final, solo para 'personalizado'
+ * @returns {{i:string, f:string, etq:string}} límites ISO inclusivos y etiqueta legible
+ * @example rangoDe('mes')  // { i:'2026-08-01', f:'2026-08-31', etq:'Agosto de 2026' }
+ */
+function rangoDe(clave, desde, hasta) {
+  const t = hoy();
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+  const etiquetaFechas = (a, b) => FMT_DIA.format(a) + " al " + FMT_DIA.format(b) + " de " + b.getFullYear();
+
+  if (clave === "periodo") {
+    const { inicio, fin } = limitesPeriodo(datos.perfil.ancla, datos.perfil.ciclo, desfase);
+    return datos.perfil.ciclo === "diario"
+      ? { i: aISO(inicio), f: aISO(fin), etq: "Día " + FMT_LARGO.format(inicio) }
+      : { i: aISO(inicio), f: aISO(fin), etq: cap(nombreCiclo(datos.perfil.ciclo)) + " del " + etiquetaFechas(inicio, fin) };
+  }
+  if (clave === "mes") {
+    const a = new Date(t.getFullYear(), t.getMonth(), 1), b = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+    return { i: aISO(a), f: aISO(b), etq: cap(FMT_MES.format(a)) };
+  }
+  if (clave === "mes_pasado") {
+    const a = new Date(t.getFullYear(), t.getMonth() - 1, 1), b = new Date(t.getFullYear(), t.getMonth(), 0);
+    return { i: aISO(a), f: aISO(b), etq: cap(FMT_MES.format(a)) };
+  }
+  if (clave === "trimestre") {
+    const a = new Date(t.getFullYear(), t.getMonth() - 2, 1);
+    return { i: aISO(a), f: aISO(t), etq: "Últimos tres meses (" + etiquetaFechas(a, t) + ")" };
+  }
+  if (clave === "anio") {
+    const a = new Date(t.getFullYear(), 0, 1), b = new Date(t.getFullYear(), 11, 31);
+    return { i: aISO(a), f: aISO(b), etq: "Año " + t.getFullYear() };
+  }
+  if (clave === "personalizado" && desde && hasta) {
+    const a = aFecha(desde), b = aFecha(hasta);
+    return a <= b
+      ? { i: desde, f: hasta, etq: "Del " + etiquetaFechas(a, b) }
+      : { i: hasta, f: desde, etq: "Del " + etiquetaFechas(b, a) };
+  }
+  // 'todo': de la primera a la última captura
+  const fechas = datos.movimientos.map(m => m.fecha).sort();
+  return {
+    i: fechas[0] || aISO(t),
+    f: fechas[fechas.length - 1] || aISO(t),
+    etq: "Historial completo"
+  };
+}
+
+/** Movimientos dentro de un rango ISO, ordenados de la captura más vieja a la más nueva. */
+function movimientosEnRango(r) {
+  return datos.movimientos
+    .filter(m => m.fecha >= r.i && m.fecha <= r.f)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.creado - b.creado);
+}
+
+/** Suma ingresos, gastos y desglose por categoría de una lista de movimientos. */
+function resumirMovimientos(movs) {
+  let ingresos = 0, gastos = 0;
+  const porCategoria = {};
+  for (const m of movs) {
+    if (m.tipo === "ingreso") ingresos += m.monto;
+    else { gastos += m.monto; porCategoria[m.categoria] = (porCategoria[m.categoria] || 0) + m.monto; }
+  }
+  return { ingresos, gastos, saldo: ingresos - gastos, porCategoria };
 }
 
 /**
- * Exporta los movimientos a CSV con BOM, para que Excel en español
- * respete los acentos al abrirlo directo.
+ * Exporta a CSV con BOM para que Excel en español respete los acentos.
+ * Incluye un encabezado legible y los totales al final del archivo.
+ * @param {{i:string,f:string,etq:string}} r rango devuelto por rangoDe()
  */
-function exportarCSV() {
-  const filas = [["Fecha", "Tipo", "Categoria", "Monto", "Metodo", "Nota"]];
-  datos.movimientos.slice().sort((a, b) => a.fecha.localeCompare(b.fecha)).forEach(m => {
-    filas.push([m.fecha, m.tipo, nombreCategoria(m.categoria), m.monto.toFixed(2), m.metodo || "", m.nota || ""]);
+function exportarCSV(r) {
+  const movs = movimientosEnRango(r);
+  const s = resumirMovimientos(movs);
+  const filas = [
+    ["Revive tu Espacio A.C. - Mis movimientos"],
+    ["Persona", datos.perfil.nombre],
+    ["Periodo", r.etq],
+    ["Generado", aISO(hoy())],
+    [],
+    ["Fecha", "Tipo", "Categoria", "Monto", "Metodo", "Nota"]
+  ];
+  movs.forEach(m => filas.push([
+    m.fecha, m.tipo === "ingreso" ? "Ingreso" : "Gasto",
+    nombreCategoria(m.categoria), m.monto.toFixed(2), m.metodo || "", m.nota || ""
+  ]));
+  filas.push([], ["Total que entro", "", "", s.ingresos.toFixed(2)]);
+  filas.push(["Total que salio", "", "", s.gastos.toFixed(2)]);
+  filas.push(["Diferencia", "", "", s.saldo.toFixed(2)]);
+
+  const csv = "\uFEFF" + filas
+    .map(f => f.map(c => '"' + String(c ?? "").replace(/"/g, '""') + '"').join(","))
+    .join("\r\n");
+  descargar("movimientos-" + r.i + "-a-" + r.f + ".csv", csv, "text/csv");
+  avisar(movs.length ? "Archivo para Excel descargado" : "No hay movimientos en ese periodo");
+}
+
+/**
+ * Arma el reporte y abre el diálogo de impresión del sistema, donde
+ * tanto iOS como Android ofrecen "Guardar como PDF". Se hace así a
+ * propósito: evita cargar una librería externa y mantiene la app
+ * funcionando sin conexión.
+ * @param {{i:string,f:string,etq:string}} r
+ */
+function generarPDF(r) {
+  const movs = movimientosEnRango(r);
+  if (!movs.length) { avisar("No hay movimientos en ese periodo"); return; }
+  const s = resumirMovimientos(movs);
+
+  const filas = movs.map(m =>
+    "<tr><td>" + esc(FMT_DIA.format(aFecha(m.fecha))) + "</td>" +
+    "<td>" + esc(nombreCategoria(m.categoria)) + "</td>" +
+    "<td>" + esc(m.metodo || "") + (m.nota ? " · " + esc(m.nota) : "") + "</td>" +
+    '<td class="der">' + (m.tipo === "ingreso" ? "+" : "−") + fmt(m.monto) + "</td></tr>"
+  ).join("");
+
+  const categorias = Object.entries(s.porCategoria).sort((a, b) => b[1] - a[1]).map(([c, v]) =>
+    "<tr><td>" + esc(nombreCategoria(c)) + "</td>" +
+    '<td class="der">' + Math.round(v / (s.gastos || 1) * 100) + "%</td>" +
+    '<td class="der">' + fmt(v) + "</td></tr>"
+  ).join("");
+
+  document.getElementById("impresion").innerHTML =
+    '<div class="rep">' +
+      '<div class="rep__cab">' +
+        '<div class="rep__marca">Revive tu Espacio</div>' +
+        '<div class="rep__ac">A . C .</div>' +
+        '<div class="rep__titulo">Mis movimientos</div>' +
+        '<div class="rep__meta">' + esc(datos.perfil.nombre) + " · " + esc(r.etq) +
+          " · Generado el " + esc(FMT_LARGO.format(hoy())) + "</div>" +
+      "</div>" +
+      '<dl class="rep__resumen">' +
+        "<div><dt>Entró</dt><dd>" + fmt(s.ingresos) + "</dd></div>" +
+        "<div><dt>Salió</dt><dd>" + fmt(s.gastos) + "</dd></div>" +
+        "<div><dt>" + (s.saldo < 0 ? "Faltó" : "Quedó") + "</dt><dd>" + fmt(Math.abs(s.saldo)) + "</dd></div>" +
+      "</dl>" +
+      (categorias ? "<h3>En qué se fue</h3><table><thead><tr><th>Categoría</th>" +
+        '<th class="der">Parte</th><th class="der">Monto</th></tr></thead><tbody>' +
+        categorias + "</tbody></table>" : "") +
+      "<h3>Detalle de movimientos (" + movs.length + ")</h3>" +
+      "<table><thead><tr><th>Fecha</th><th>Categoría</th><th>Detalle</th>" +
+        '<th class="der">Monto</th></tr></thead><tbody>' + filas + "</tbody></table>" +
+      '<div class="rep__pie">Documento generado por la herramienta de finanzas personales de ' +
+        "Revive tu Espacio A.C. La información proviene únicamente de lo capturado por la " +
+        "persona en su propio dispositivo y no fue consultada ni almacenada por la asociación.</div>" +
+    "</div>";
+
+  avisar("Elige \"Guardar como PDF\" en el menú de impresión");
+  setTimeout(() => window.print(), 350);
+}
+
+
+/** Descarga contenido binario (el .xlsx) sin depender de red. */
+function descargarBinario(nombreArchivo, bytes, tipoMime) {
+  const blob = new Blob([bytes], { type: tipoMime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = nombreArchivo;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ================================================================
+   Generador mínimo de archivos .xlsx en JavaScript puro.
+
+   Un .xlsx es un ZIP con documentos XML dentro. Aquí se arma el ZIP
+   por método "store" (sin compresión), que Excel, LibreOffice y
+   Google Sheets aceptan sin problema. Se evita así cargar cualquier
+   librería externa y la aplicación sigue funcionando sin conexión.
+   ================================================================ */
+
+/* ---------- CRC32, requerido por el formato ZIP ---------- */
+const TABLA_CRC = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = TABLA_CRC[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+/**
+ * Empaqueta archivos en un ZIP sin compresión.
+ * @param {Array<{nombre:string, datos:Uint8Array}>} archivos
+ * @returns {Uint8Array} contenido binario del ZIP
+ */
+function zip(archivos) {
+  const cod = new TextEncoder();
+  const locales = [], central = [];
+  let desplazamiento = 0;
+
+  for (const a of archivos) {
+    const nombre = cod.encode(a.nombre);
+    const crc = crc32(a.datos);
+    const tam = a.datos.length;
+
+    const enc = new Uint8Array(30 + nombre.length);
+    const v = new DataView(enc.buffer);
+    v.setUint32(0, 0x04034b50, true);   // firma local
+    v.setUint16(4, 20, true);           // versión mínima
+    v.setUint16(6, 0x0800, true);       // banderas: nombres en UTF-8
+    v.setUint16(8, 0, true);            // método 0 = store
+    v.setUint32(14, crc, true);
+    v.setUint32(18, tam, true);
+    v.setUint32(22, tam, true);
+    v.setUint16(26, nombre.length, true);
+    enc.set(nombre, 30);
+    locales.push(enc, a.datos);
+
+    const cen = new Uint8Array(46 + nombre.length);
+    const w = new DataView(cen.buffer);
+    w.setUint32(0, 0x02014b50, true);   // firma central
+    w.setUint16(4, 20, true);
+    w.setUint16(6, 20, true);
+    w.setUint16(8, 0x0800, true);
+    w.setUint16(10, 0, true);
+    w.setUint32(16, crc, true);
+    w.setUint32(20, tam, true);
+    w.setUint32(24, tam, true);
+    w.setUint16(28, nombre.length, true);
+    w.setUint32(42, desplazamiento, true);
+    cen.set(nombre, 46);
+    central.push(cen);
+
+    desplazamiento += enc.length + tam;
+  }
+
+  const tamCentral = central.reduce((s, b) => s + b.length, 0);
+  const fin = new Uint8Array(22);
+  const f = new DataView(fin.buffer);
+  f.setUint32(0, 0x06054b50, true);
+  f.setUint16(8, archivos.length, true);
+  f.setUint16(10, archivos.length, true);
+  f.setUint32(12, tamCentral, true);
+  f.setUint32(16, desplazamiento, true);
+
+  const partes = locales.concat(central, [fin]);
+  const total = partes.reduce((s, b) => s + b.length, 0);
+  const salida = new Uint8Array(total);
+  let p = 0;
+  for (const b of partes) { salida.set(b, p); p += b.length; }
+  return salida;
+}
+
+/* ---------- Utilidades de hoja ---------- */
+
+const xmlEsc = s => String(s ?? "")
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;").replace(/'/g, "&apos;")
+  .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+
+/** Convierte un índice de columna (0) en su letra de Excel (A). */
+function col(n) {
+  let s = "";
+  n += 1;
+  while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
+/** Fecha a número de serie de Excel (base 1899-12-30). */
+function serie(f) {
+  return Math.floor((Date.UTC(f.getFullYear(), f.getMonth(), f.getDate()) - Date.UTC(1899, 11, 30)) / 86400000);
+}
+
+/* ---------- Estilos ---------- */
+/* Los índices que devuelve este bloque son los que se usan como `s`
+   en cada celda. Se declaran una sola vez para todo el libro.        */
+const E = {
+  NORMAL:0, MARCA:1, TITULO:2, SUB:3, ENCABEZADO:4, ENCABEZADO_IZQ:5, SECCION:6,
+  GRUPO:7, CONCEPTO:8, SANGRIA:9, MONEDA:10, MONEDA_FUERTE:11, PCT:12, PCT_FUERTE:13,
+  SUBTOTAL_TXT:14, TOTAL_TXT:15, TOTAL_NUM:16, RESULTADO_TXT:17, RESULTADO_NUM:18,
+  RESULTADO_PCT:19, NOTA:20, NOTA_TIT:21, FECHA:22, TENUE:23, BARRA:24,
+  CONCEPTO_SIMPLE:25, TENUE_CELDA:26, NOTA_CELDA:27, ENTERO:28
+};
+
+const VERDE = "FF445C38", SALVIA = "FF8FA47C", CLARO = "FFE7EDE0",
+      PAPEL = "FFF7F6F1", TINTA = "FF23301C", GRIS = "FF5E6B54", LINEA = "FFE2E3D9";
+
+const ESTILOS_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="4">
+<numFmt numFmtId="164" formatCode="_-&quot;$&quot;* #,##0.00_-;\\-&quot;$&quot;* #,##0.00_-;_-&quot;$&quot;* &quot;-&quot;??_-;_-@_-"/>
+<numFmt numFmtId="165" formatCode="0.0%;\\-0.0%;&quot;-&quot;"/>
+<numFmt numFmtId="166" formatCode="dd/mm/yyyy"/>
+<numFmt numFmtId="167" formatCode="#,##0"/>
+</numFmts>
+<fonts count="10">
+<font><sz val="10"/><color rgb="${TINTA}"/><name val="Calibri"/></font>
+<font><b/><sz val="12"/><color rgb="${VERDE}"/><name val="Calibri"/></font>
+<font><b/><sz val="15"/><color rgb="${TINTA}"/><name val="Calibri"/></font>
+<font><i/><sz val="9"/><color rgb="${GRIS}"/><name val="Calibri"/></font>
+<font><b/><sz val="9"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>
+<font><b/><sz val="10"/><color rgb="${VERDE}"/><name val="Calibri"/></font>
+<font><b/><sz val="10"/><color rgb="${TINTA}"/><name val="Calibri"/></font>
+<font><sz val="9"/><color rgb="${GRIS}"/><name val="Calibri"/></font>
+<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>
+<font><sz val="10"/><color rgb="${SALVIA}"/><name val="Calibri"/></font>
+</fonts>
+<fills count="6">
+<fill><patternFill patternType="none"/></fill>
+<fill><patternFill patternType="gray125"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="${VERDE}"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="${CLARO}"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="${PAPEL}"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="${SALVIA}"/><bgColor indexed="64"/></patternFill></fill>
+</fills>
+<borders count="5">
+<border><left/><right/><top/><bottom/><diagonal/></border>
+<border><left/><right/><top/><bottom style="thin"><color rgb="${LINEA}"/></bottom><diagonal/></border>
+<border><left/><right/><top style="thin"><color rgb="${VERDE}"/></top><bottom style="double"><color rgb="${VERDE}"/></bottom><diagonal/></border>
+<border><left/><right/><top/><bottom style="medium"><color rgb="${VERDE}"/></bottom><diagonal/></border>
+<border><left/><right/><top/><bottom style="thin"><color rgb="${VERDE}"/></bottom><diagonal/></border>
+</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="29">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="4" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="4" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="5" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="6" fillId="0" borderId="4" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" indent="2"/></xf>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="164" fontId="6" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="165" fontId="6" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="0" fontId="6" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" indent="1"/></xf>
+<xf numFmtId="0" fontId="6" fillId="0" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="164" fontId="6" fillId="0" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="8" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="164" fontId="8" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="165" fontId="8" fillId="2" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="5" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="9" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="6" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="7" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="167" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+
+/**
+ * Construye el XML de una hoja.
+ * @param {{columnas:number[], filas:Array, merges?:string[], congelar?:string}} hoja
+ */
+function hojaXML(hoja) {
+  const cols = hoja.columnas.map((a, i) =>
+    `<col min="${i + 1}" max="${i + 1}" width="${a}" customWidth="1"/>`).join("");
+
+  const filas = hoja.filas.map((celdas, r) => {
+    if (!celdas || !celdas.length) return `<row r="${r + 1}"/>`;
+    const alto = celdas.alto ? ` ht="${celdas.alto}" customHeight="1"` : "";
+    const cs = celdas.map((c, i) => {
+      if (c === null || c === undefined || c === "") return "";
+      const ref = col(i) + (r + 1);
+      const est = typeof c === "object" ? (c.s || 0) : 0;
+      const val = typeof c === "object" ? c.v : c;
+      if (typeof c === "object" && c.f) {
+        return `<c r="${ref}" s="${est}"><f>${xmlEsc(c.f)}</f></c>`;
+      }
+      if (typeof val === "number") return `<c r="${ref}" s="${est}"><v>${val}</v></c>`;
+      return `<c r="${ref}" s="${est}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(val)}</t></is></c>`;
+    }).join("");
+    return `<row r="${r + 1}"${alto}>${cs}</row>`;
+  }).join("");
+
+  const congelar = hoja.congelar
+    ? `<sheetViews><sheetView showGridLines="0" workbookViewId="0"><pane ySplit="${hoja.congelar}" topLeftCell="A${hoja.congelar + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`
+    : `<sheetViews><sheetView showGridLines="0" workbookViewId="0"/></sheetViews>`;
+
+  const merges = hoja.merges && hoja.merges.length
+    ? `<mergeCells count="${hoja.merges.length}">${hoja.merges.map(m => `<mergeCell ref="${m}"/>`).join("")}</mergeCells>`
+    : "";
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${congelar}
+<sheetFormatPr defaultRowHeight="15"/><cols>${cols}</cols><sheetData>${filas}</sheetData>${merges}
+<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>
+<pageSetup orientation="portrait" fitToWidth="1" fitToHeight="0" paperSize="1"/>
+</worksheet>`;
+}
+
+/**
+ * Arma el libro completo.
+ * @param {Array} hojas lista de {nombre, columnas, filas, merges, congelar}
+ * @returns {Uint8Array}
+ */
+function construirLibro(hojas) {
+  const cod = new TextEncoder();
+  const b = s => cod.encode(s);
+
+  const archivos = [
+    { nombre: "[Content_Types].xml", datos: b(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+${hojas.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`) },
+    { nombre: "_rels/.rels", datos: b(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`) },
+    { nombre: "xl/workbook.xml", datos: b(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>${hojas.map((h, i) => `<sheet name="${xmlEsc(h.nombre)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets>
+</workbook>`) },
+    { nombre: "xl/_rels/workbook.xml.rels", datos: b(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${hojas.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")}
+<Relationship Id="rId${hojas.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`) },
+    { nombre: "xl/styles.xml", datos: b(ESTILOS_XML) }
+  ];
+
+  hojas.forEach((h, i) => archivos.push({ nombre: `xl/worksheets/sheet${i + 1}.xml`, datos: b(hojaXML(h)) }));
+  return zip(archivos);
+}
+
+/* ================================================================
+   ESTADO DE INGRESOS Y EGRESOS — libro de tres hojas
+   Estructura de presentación equivalente a la de un estado
+   financiero: comparativo contra el periodo anterior, análisis
+   vertical, variaciones, indicadores con su lectura, notas y
+   detalle rastreable.
+   ================================================================ */
+
+/** Agrupación funcional del egreso. Cada grupo lleva su subtotal. */
+const GRUPOS_EGRESO = [
+  { titulo: "Gastos esenciales de subsistencia", cats: ["comida", "casa", "transporte"] },
+  { titulo: "Salud y educación", cats: ["salud", "escuela"] },
+  { titulo: "Compromisos financieros", cats: ["deuda"] },
+  { titulo: "Gastos personales y discrecionales", cats: ["ropa", "gustos", "otros"] }
+];
+
+/**
+ * Rango inmediatamente anterior, de la misma duración en días.
+ * Es lo que hace comparable la columna del periodo previo.
+ * @param {{i:string,f:string}} r
+ * @returns {{i:string,f:string}}
+ */
+function rangoAnterior(r) {
+  const a = aFecha(r.i), b = aFecha(r.f);
+  const dias = diasEntre(a, b) + 1;
+  const finPrev = sumaDias(a, -1);
+  return { i: aISO(sumaDias(finPrev, -(dias - 1))), f: aISO(finPrev) };
+}
+
+/** Suma de una categoría dentro de una lista de movimientos. */
+function sumaCat(movs, cid) {
+  return movs.reduce((s, m) => s + (m.tipo === "gasto" && m.categoria === cid ? m.monto : 0), 0);
+}
+
+/** Variación porcentual protegida contra división entre cero. */
+function variacion(actual, anterior) {
+  if (!anterior) return actual ? null : 0; // null se imprime como "n/a"
+  return (actual - anterior) / anterior;
+}
+
+/**
+ * Genera y descarga el libro de Excel del periodo indicado.
+ * @param {{i:string, f:string, etq:string}} r rango devuelto por rangoDe()
+ */
+function exportarExcel(r) {
+  const movs = movimientosEnRango(r);
+  if (!movs.length) { avisar("No hay movimientos en ese periodo"); return; }
+
+  const rp = rangoAnterior(r);
+  const movsPrev = movimientosEnRango(rp);
+  const act = resumirMovimientos(movs);
+  const ant = resumirMovimientos(movsPrev);
+  const hayComparativo = movsPrev.length > 0;
+
+  const dias = diasEntre(aFecha(r.i), aFecha(r.f)) + 1;
+  const baseA = act.ingresos || act.gastos || 1;   // base del análisis vertical
+  const baseB = ant.ingresos || ant.gastos || 1;
+  const persona = datos.perfil.nombre;
+  const generado = FMT_LARGO.format(hoy());
+  const pctVar = v => (v === null ? "n/a" : v);
+
+  /* ---------- Renglón estándar del estado ---------- */
+  const fila = (concepto, a, b, estiloTxt, estiloNum, estiloPct) => [
+    { v: concepto, s: estiloTxt },
+    { v: a, s: estiloNum },
+    { v: a / baseA, s: estiloPct },
+    { v: hayComparativo ? b : "", s: estiloNum },
+    { v: hayComparativo ? b / baseB : "", s: estiloPct },
+    { v: hayComparativo ? a - b : "", s: estiloNum },
+    { v: hayComparativo ? pctVar(variacion(a, b)) : "", s: estiloPct }
+  ];
+  const seccion = t => [
+    { v: t, s: E.SECCION }, { v: "", s: E.SECCION }, { v: "", s: E.SECCION },
+    { v: "", s: E.SECCION }, { v: "", s: E.SECCION }, { v: "", s: E.SECCION }, { v: "", s: E.SECCION }
+  ];
+
+  /* ================= HOJA 1 — Estado de resultados ================= */
+  const h1 = [];
+  h1.push([{ v: "REVIVE TU ESPACIO A.C.", s: E.MARCA }]);
+  h1.push([{ v: "Estado de ingresos y egresos", s: E.TITULO }]);
+  h1.push([{ v: "De " + persona + " · " + r.etq, s: E.SUB }]);
+  h1.push([{ v: "(Cifras en pesos mexicanos, preparadas sobre base de efectivo. Información no auditada.)", s: E.SUB }]);
+  h1.push([]);
+  h1.push([
+    { v: "Concepto", s: E.ENCABEZADO_IZQ },
+    { v: "Periodo actual", s: E.ENCABEZADO }, { v: "%", s: E.ENCABEZADO },
+    { v: "Periodo anterior", s: E.ENCABEZADO }, { v: "%", s: E.ENCABEZADO },
+    { v: "Variación $", s: E.ENCABEZADO }, { v: "Variación %", s: E.ENCABEZADO }
+  ]);
+
+  /* Ingresos */
+  h1.push(seccion("INGRESOS"));
+  CATEGORIAS_INGRESO.forEach(c => {
+    const a = movs.reduce((s, m) => s + (m.tipo === "ingreso" && m.categoria === c.id ? m.monto : 0), 0);
+    const b = movsPrev.reduce((s, m) => s + (m.tipo === "ingreso" && m.categoria === c.id ? m.monto : 0), 0);
+    if (a || b) h1.push(fila(c.nombre, a, b, E.SANGRIA, E.MONEDA, E.PCT));
   });
-  const csv = "\uFEFF" + filas.map(f => f.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(",")).join("\r\n");
-  descargar("movimientos-" + aISO(hoy()) + ".csv", csv, "text/csv");
-  avisar("Archivo para Excel descargado");
+  h1.push(fila("Total de ingresos", act.ingresos, ant.ingresos, E.TOTAL_TXT, E.TOTAL_NUM, E.PCT_FUERTE));
+  h1.push([]);
+
+  /* Egresos por función */
+  h1.push(seccion("EGRESOS POR FUNCIÓN"));
+  const subtotales = [];
+  GRUPOS_EGRESO.forEach(g => {
+    const partidas = g.cats.filter(c => sumaCat(movs, c) || sumaCat(movsPrev, c));
+    if (!partidas.length) return;
+    h1.push([{ v: g.titulo, s: E.GRUPO }, "", "", "", "", "", ""]);
+    let sa = 0, sb = 0;
+    partidas.forEach(c => {
+      const a = sumaCat(movs, c), b = sumaCat(movsPrev, c);
+      sa += a; sb += b;
+      h1.push(fila(nombreCategoria(c), a, b, E.SANGRIA, E.MONEDA, E.PCT));
+    });
+    h1.push(fila("Subtotal " + g.titulo.toLowerCase(), sa, sb, E.SUBTOTAL_TXT, E.MONEDA_FUERTE, E.PCT_FUERTE));
+    subtotales.push({ titulo: g.titulo, a: sa, b: sb });
+  });
+  h1.push(fila("Total de egresos", act.gastos, ant.gastos, E.TOTAL_TXT, E.TOTAL_NUM, E.PCT_FUERTE));
+  h1.push([]);
+
+  /* Resultado */
+  const etqRes = act.saldo < 0 ? "DÉFICIT DEL PERIODO" : "REMANENTE DEL PERIODO";
+  h1.push([
+    { v: etqRes, s: E.RESULTADO_TXT },
+    { v: act.saldo, s: E.RESULTADO_NUM },
+    { v: act.saldo / baseA, s: E.RESULTADO_PCT },
+    { v: hayComparativo ? ant.saldo : "", s: E.RESULTADO_NUM },
+    { v: hayComparativo ? ant.saldo / baseB : "", s: E.RESULTADO_PCT },
+    { v: hayComparativo ? act.saldo - ant.saldo : "", s: E.RESULTADO_NUM },
+    { v: hayComparativo ? pctVar(variacion(act.saldo, ant.saldo)) : "", s: E.RESULTADO_PCT }
+  ]);
+  h1.push([]);
+  h1.push([{ v: "El análisis vertical expresa cada renglón como proporción del total de ingresos del periodo respectivo.", s: E.NOTA }]);
+  if (!hayComparativo) {
+    h1.push([{ v: "No se presenta comparativo: no existen movimientos registrados en el periodo inmediato anterior (" +
+      FMT_DIA.format(aFecha(rp.i)) + " al " + FMT_DIA.format(aFecha(rp.f)) + ").", s: E.NOTA }]);
+  }
+  h1.push([]);
+  h1.push([{ v: "Las notas que se acompañan son parte integrante de este estado.", s: E.TENUE }]);
+  h1.push([]);
+  h1.push([]);
+  h1.push([{ v: "_______________________________", s: E.TENUE }]);
+  h1.push([{ v: persona, s: E.CONCEPTO_SIMPLE }]);
+  h1.push([{ v: "Responsable de la información", s: E.TENUE }]);
+  h1.push([{ v: "Generado el " + generado, s: E.TENUE }]);
+
+  /* ================= HOJA 2 — Análisis e indicadores ================= */
+  const h2 = [];
+  h2.push([{ v: "REVIVE TU ESPACIO A.C.", s: E.MARCA }]);
+  h2.push([{ v: "Análisis e indicadores", s: E.TITULO }]);
+  h2.push([{ v: "De " + persona + " · " + r.etq, s: E.SUB }]);
+  h2.push([]);
+
+  h2.push([{ v: "COMPOSICIÓN DEL EGRESO POR FUNCIÓN", s: E.SECCION }, { v: "", s: E.SECCION },
+           { v: "", s: E.SECCION }, { v: "", s: E.SECCION }]);
+  h2.push([{ v: "Grupo", s: E.ENCABEZADO_IZQ }, { v: "Importe", s: E.ENCABEZADO },
+           { v: "% del egreso", s: E.ENCABEZADO }, { v: "Proporción", s: E.ENCABEZADO_IZQ }]);
+  const totalEgreso = act.gastos || 1;
+  subtotales.slice().sort((x, y) => y.a - x.a).forEach(g => {
+    const p = g.a / totalEgreso;
+    h2.push([
+      { v: g.titulo, s: E.CONCEPTO },
+      { v: g.a, s: E.MONEDA },
+      { v: p, s: E.PCT },
+      { v: "█".repeat(Math.max(0, Math.round(p * 28))), s: E.BARRA }
+    ]);
+  });
+  h2.push([{ v: "Total", s: E.TOTAL_TXT }, { v: act.gastos, s: E.TOTAL_NUM },
+           { v: 1, s: E.PCT_FUERTE }, { v: "", s: E.TOTAL_TXT }]);
+  h2.push([]);
+
+  /* Indicadores con su lectura */
+  const esenciales = (subtotales.find(g => g.titulo.startsWith("Gastos esenciales")) || { a: 0 }).a;
+  const financieros = (subtotales.find(g => g.titulo.startsWith("Compromisos")) || { a: 0 }).a;
+  const discrecionales = (subtotales.find(g => g.titulo.startsWith("Gastos personales")) || { a: 0 }).a;
+  const mayor = Object.entries(act.porCategoria).sort((a, b) => b[1] - a[1])[0];
+
+  const ind = [
+    ["Tasa de ahorro", act.ingresos ? act.saldo / act.ingresos : 0, "Remanente ÷ ingresos",
+      act.saldo <= 0 ? "Déficit: los egresos superan a los ingresos del periodo."
+        : act.saldo / act.ingresos < 0.1 ? "Por debajo del 10% recomendado como mínimo."
+        : "Dentro de un rango sano."],
+    ["Índice de gastos esenciales", act.ingresos ? esenciales / act.ingresos : 0, "Gastos esenciales ÷ ingresos",
+      esenciales / (act.ingresos || 1) > 0.6
+        ? "Alto: más de seis de cada diez pesos se van en subsistencia."
+        : "Deja margen para ahorro y compromisos."],
+    ["Carga financiera", act.ingresos ? financieros / act.ingresos : 0, "Pago de deuda ÷ ingresos",
+      financieros / (act.ingresos || 1) > 0.35 ? "Crítica: por encima del 35%, umbral de sobreendeudamiento."
+        : financieros / (act.ingresos || 1) > 0.2 ? "En vigilancia: entre 20% y 35%."
+        : "Manejable."],
+    ["Gasto discrecional", act.ingresos ? discrecionales / act.ingresos : 0, "Gastos personales ÷ ingresos",
+      "Es la porción con mayor capacidad de ajuste inmediato."],
+    ["Concentración del egreso", mayor ? mayor[1] / totalEgreso : 0, "Mayor categoría ÷ egreso total",
+      mayor ? "La categoría de mayor peso es " + nombreCategoria(mayor[0]) + "." : "Sin egresos registrados."]
+  ];
+
+  h2.push([{ v: "INDICADORES", s: E.SECCION }, { v: "", s: E.SECCION }, { v: "", s: E.SECCION }, { v: "", s: E.SECCION }]);
+  h2.push([{ v: "Indicador", s: E.ENCABEZADO_IZQ }, { v: "Resultado", s: E.ENCABEZADO },
+           { v: "Fórmula", s: E.ENCABEZADO_IZQ }, { v: "Lectura", s: E.ENCABEZADO_IZQ }]);
+  ind.forEach(([n, v, f, l]) => h2.push([
+    { v: n, s: E.CONCEPTO }, { v: v, s: E.PCT }, { v: f, s: E.TENUE_CELDA }, { v: l, s: E.NOTA_CELDA }
+  ]));
+  h2.push([]);
+
+  h2.push([{ v: "MEDIDAS DE FLUJO", s: E.SECCION }, { v: "", s: E.SECCION }, { v: "", s: E.SECCION }, { v: "", s: E.SECCION }]);
+  h2.push([{ v: "Días que comprende el periodo", s: E.CONCEPTO }, { v: dias, s: E.ENTERO }, "", ""]);
+  h2.push([{ v: "Ingreso promedio diario", s: E.CONCEPTO }, { v: act.ingresos / dias, s: E.MONEDA }, "", ""]);
+  h2.push([{ v: "Egreso promedio diario", s: E.CONCEPTO }, { v: act.gastos / dias, s: E.MONEDA }, "", ""]);
+  h2.push([{ v: "Número de movimientos registrados", s: E.CONCEPTO }, { v: movs.length, s: E.ENTERO }, "", ""]);
+  h2.push([{ v: "Ticket promedio de egreso", s: E.CONCEPTO },
+           { v: act.gastos / (movs.filter(m => m.tipo === "gasto").length || 1), s: E.MONEDA }, "", ""]);
+
+  /* ================= HOJA 3 — Notas y detalle ================= */
+  const h3 = [];
+  const nota = (t, texto) => { h3.push([{ v: t, s: E.NOTA_TIT }]); h3.push([{ v: texto, s: E.NOTA }]); h3.push([]); };
+
+  h3.push([{ v: "REVIVE TU ESPACIO A.C.", s: E.MARCA }]);
+  h3.push([{ v: "Notas al estado de ingresos y egresos", s: E.TITULO }]);
+  h3.push([{ v: "De " + persona + " · " + r.etq, s: E.SUB }]);
+  h3.push([]);
+
+  nota("Nota 1 — Bases de preparación",
+    "El presente estado se preparó sobre base de efectivo: las partidas se reconocen en el momento en que el " +
+    "dinero entra o sale, sin acumulaciones ni devengo. No constituye un estado financiero formulado conforme a " +
+    "las Normas de Información Financiera mexicanas, cuyo alcance corresponde a entidades económicas y no a " +
+    "personas físicas; se adopta únicamente su lógica de presentación por función, análisis vertical y " +
+    "comparabilidad. Las cifras están expresadas en pesos mexicanos, no fueron auditadas ni revisadas por un " +
+    "tercero independiente, y provienen exclusivamente de lo capturado por la propia persona en su dispositivo.");
+
+  nota("Nota 2 — Composición de los ingresos",
+    "Los ingresos del periodo ascendieron a " + fmt(act.ingresos) + ", integrados por " +
+    (CATEGORIAS_INGRESO.filter(c => movs.some(m => m.tipo === "ingreso" && m.categoria === c.id))
+      .map(c => c.nombre.toLowerCase()).join(", ") || "ningún concepto registrado") + ". " +
+    (hayComparativo
+      ? "En el periodo anterior fueron de " + fmt(ant.ingresos) + ", lo que representa una variación de " +
+        fmt(act.ingresos - ant.ingresos) + "."
+      : "No se dispone de cifras del periodo anterior para efectos comparativos."));
+
+  nota("Nota 3 — Composición de los egresos",
+    "Los egresos sumaron " + fmt(act.gastos) + " y se presentan agrupados por función en " + subtotales.length +
+    " rubros. " + (mayor
+      ? "El de mayor peso individual es " + nombreCategoria(mayor[0]) + ", con " + fmt(mayor[1]) + ", equivalente a " +
+        Math.round(mayor[1] / totalEgreso * 100) + "% del egreso total."
+      : "No se registraron egresos en el periodo.") +
+    " Los gastos esenciales de subsistencia representaron " + fmt(esenciales) + ".");
+
+  nota("Nota 4 — Resultado del periodo",
+    (act.saldo >= 0
+      ? "El periodo cerró con un remanente de " + fmt(act.saldo) + ", equivalente a " +
+        Math.round(act.saldo / baseA * 100) + "% de los ingresos."
+      : "El periodo cerró con un déficit de " + fmt(Math.abs(act.saldo)) + ": los egresos excedieron a los ingresos. " +
+        "Un déficit sostenido se financia con ahorro previo o con deuda, por lo que conviene identificar el rubro que lo origina.") +
+    (hayComparativo ? " El periodo anterior cerró en " + fmt(ant.saldo) + "." : ""));
+
+  const deudaTotal = datos.deudas.reduce((s, d) => s + d.saldo, 0);
+  nota("Nota 5 — Compromisos financieros registrados",
+    datos.deudas.length
+      ? "Al cierre del periodo se tienen registradas " + datos.deudas.length +
+        (datos.deudas.length === 1 ? " deuda" : " deudas") + " con un saldo insoluto conjunto de " + fmt(deudaTotal) +
+        ", con pagos comprometidos por " + fmt(datos.deudas.reduce((s, d) => s + (d.pagoMensual || 0), 0)) +
+        " mensuales. Estos saldos no forman parte del estado de ingresos y egresos: solo el pago efectuado en el " +
+        "periodo se refleja como egreso."
+      : "No hay deudas registradas en la herramienta al momento de generar este estado.");
+
+  if (datos.metas.length) {
+    nota("Nota 6 — Metas de ahorro",
+      "Se tienen " + datos.metas.length + (datos.metas.length === 1 ? " meta" : " metas") + " de ahorro por un objetivo " +
+      "conjunto de " + fmt(datos.metas.reduce((s, m) => s + m.objetivo, 0)) + ", con " +
+      fmt(datos.metas.reduce((s, m) => s + m.ahorrado, 0)) + " acumulados. El avance de las metas se registra por " +
+      "separado y no se refleja como egreso del periodo.");
+  }
+
+  nota("Nota 7 — Limitaciones de la información",
+    "La integridad de estas cifras depende por completo de que la persona haya capturado todos sus movimientos. " +
+    "Un gasto no registrado sobrestima el remanente del periodo y distorsiona todos los indicadores. Este documento " +
+    "no acredita ingresos ni solvencia frente a terceros y no debe presentarse con ese propósito.");
+
+  h3.push([]);
+  h3.push([{ v: "DETALLE DE MOVIMIENTOS DEL PERIODO", s: E.SECCION }, { v: "", s: E.SECCION }, { v: "", s: E.SECCION },
+           { v: "", s: E.SECCION }, { v: "", s: E.SECCION }, { v: "", s: E.SECCION }]);
+  h3.push([{ v: "Fecha", s: E.ENCABEZADO_IZQ }, { v: "Tipo", s: E.ENCABEZADO_IZQ },
+           { v: "Grupo funcional", s: E.ENCABEZADO_IZQ }, { v: "Categoría", s: E.ENCABEZADO_IZQ },
+           { v: "Forma de pago / nota", s: E.ENCABEZADO_IZQ }, { v: "Importe", s: E.ENCABEZADO }]);
+  movs.forEach(m => {
+    const grupo = m.tipo === "ingreso" ? "Ingresos"
+      : (GRUPOS_EGRESO.find(g => g.cats.includes(m.categoria)) || { titulo: "Sin clasificar" }).titulo;
+    h3.push([
+      { v: serie(aFecha(m.fecha)), s: E.FECHA },
+      { v: m.tipo === "ingreso" ? "Ingreso" : "Egreso", s: E.CONCEPTO },
+      { v: grupo, s: E.CONCEPTO },
+      { v: nombreCategoria(m.categoria), s: E.CONCEPTO },
+      { v: (m.metodo || "") + (m.nota ? " · " + m.nota : ""), s: E.CONCEPTO },
+      { v: m.tipo === "ingreso" ? m.monto : -m.monto, s: E.MONEDA }
+    ]);
+  });
+  h3.push([{ v: "Suma de control", s: E.TOTAL_TXT }, { v: "", s: E.TOTAL_TXT }, { v: "", s: E.TOTAL_TXT },
+           { v: "", s: E.TOTAL_TXT }, { v: "", s: E.TOTAL_TXT }, { v: act.saldo, s: E.TOTAL_NUM }]);
+
+  const libro = construirLibro([
+    { nombre: "Estado de resultados", columnas: [42, 16, 9, 16, 9, 16, 11], filas: h1, congelar: 6,
+      merges: ["A2:G2", "A3:G3", "A4:G4"] },
+    { nombre: "Análisis e indicadores", columnas: [38, 16, 26, 62], filas: h2 },
+    { nombre: "Notas y detalle", columnas: [15, 12, 34, 22, 34, 16], filas: h3,
+      merges: ["A2:F2", "A3:F3"] }
+  ]);
+
+  descargarBinario("Estado-de-ingresos-y-egresos-" + r.i + "-a-" + r.f + ".xlsx", libro,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  avisar("Estado financiero descargado");
+}
+
+/** Hoja para elegir qué periodo descargar y en qué formato. */
+function hojaDescargas() {
+  const opciones = [
+    ["periodo", articuloCiclo(datos.perfil.ciclo, true)],
+    ["mes", "Este mes"],
+    ["mes_pasado", "Mes pasado"],
+    ["trimestre", "Últimos 3 meses"],
+    ["anio", "Este año"],
+    ["todo", "Todo mi historial"],
+    ["personalizado", "Elegir fechas"]
+  ];
+  const cuerpo =
+    '<div class="campo"><label id="lbl-rango">¿De qué periodo?</label>' +
+      '<div class="fichas" id="rangos" role="group" aria-labelledby="lbl-rango">' +
+        opciones.map(([k, t], n) =>
+          '<button type="button" class="ficha" data-rango="' + k + '" aria-pressed="' + (n === 0) + '">' +
+          esc(t) + "</button>").join("") +
+      "</div></div>" +
+    '<div id="caja-fechas" class="rejilla-2" hidden>' +
+      '<div class="campo"><label for="r-desde">Desde</label>' +
+        '<input class="entrada" id="r-desde" type="date" max="' + aISO(hoy()) + '"></div>' +
+      '<div class="campo"><label for="r-hasta">Hasta</label>' +
+        '<input class="entrada" id="r-hasta" type="date" max="' + aISO(hoy()) + '"></div>' +
+    "</div>" +
+    '<p class="campo__ayuda" id="conteo-rango" aria-live="polite"></p>' +
+    '<div class="btn-grupo" style="margin-top:var(--s-5)">' +
+      '<button class="btn" type="button" id="btn-r-excel">Estado en Excel</button>' +
+      '<button class="btn btn--fantasma" type="button" id="btn-r-pdf">PDF</button>' +
+    "</div>" +
+    '<button class="btn btn--fantasma btn--bloque" type="button" id="btn-r-csv" ' +
+      'style="margin-top:var(--s-3);font-weight:500">Descargar CSV simple</button>' +
+    '<p class="campo__ayuda" style="margin-top:var(--s-4)">El Excel trae el estado con comparativo, análisis vertical, indicadores y notas. El PDF se genera con la opción ' +
+      '"Guardar como PDF" del menú de impresión de tu teléfono.</p>';
+
+  abrirHoja("Descargar mis movimientos", cuerpo, caja => {
+    let clave = "periodo";
+    const cajaFechas = caja.querySelector("#caja-fechas");
+    const conteo = caja.querySelector("#conteo-rango");
+
+    function rangoElegido() {
+      return rangoDe(clave, caja.querySelector("#r-desde").value, caja.querySelector("#r-hasta").value);
+    }
+    function actualizar() {
+      cajaFechas.hidden = clave !== "personalizado";
+      const r = rangoElegido();
+      const n = movimientosEnRango(r).length;
+      conteo.textContent = esc(r.etq) + " · " + (n === 1 ? "1 movimiento" : n + " movimientos");
+    }
+    actualizar();
+
+    caja.addEventListener("click", e => {
+      const b = e.target.closest("[data-rango]");
+      if (!b) return;
+      clave = b.dataset.rango;
+      caja.querySelectorAll("[data-rango]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+      actualizar();
+    });
+    caja.addEventListener("change", actualizar);
+
+    caja.querySelector("#btn-r-excel").addEventListener("click", () => { exportarExcel(rangoElegido()); cerrarHoja(); });
+    caja.querySelector("#btn-r-csv").addEventListener("click", () => { exportarCSV(rangoElegido()); cerrarHoja(); });
+    caja.querySelector("#btn-r-pdf").addEventListener("click", () => { const r = rangoElegido(); cerrarHoja(); generarPDF(r); });
+  });
+}
+
+/**
+ * Días transcurridos desde el último respaldo descargado.
+ * @returns {number|null} null si nunca se ha descargado uno
+ */
+function diasSinRespaldo() {
+  if (!datos.ultimoRespaldo) return null;
+  return Math.floor((Date.now() - datos.ultimoRespaldo) / 86400000);
 }
 
 /**
@@ -1611,6 +2827,7 @@ document.addEventListener("click", async e => {
   const ir = t.closest("[data-ir]");
   if (ir) {
     if (!datos.perfil) return;
+    if (!document.getElementById("velo").hidden) cerrarHoja();
     vistaActual = ir.dataset.ir;
     pintar();
     document.getElementById("vista").focus();
@@ -1687,9 +2904,10 @@ document.addEventListener("click", async e => {
     return;
   }
 
+  if (t.closest("#campana")) { hojaAlertas(); return; }
   if (t.closest("#fab")) { hojaMovimiento(); return; }
-  if (t.closest("#btn-exportar")) { exportarJSON(); return; }
-  if (t.closest("#btn-csv")) { exportarCSV(); return; }
+  if (t.closest("#btn-descargas")) { hojaDescargas(); return; }
+  if (t.closest("#btn-exportar")) { await exportarJSON(); return; }
   if (t.closest("#btn-borrar-todo")) {
     confirmar("Borrar todos mis datos",
       "Se eliminarán tus movimientos, bolsas, metas y deudas de este dispositivo. Esto no se puede deshacer.",
@@ -1765,6 +2983,18 @@ window.addEventListener("unhandledrejection", () => avisar("Algo falló. Si se r
     if (datos.perfil) desfase = periodoActual(datos.perfil.ancla, datos.perfil.ciclo);
   }
   if (Almacen.modo === "memoria") almacenDuradero = false;
+
+  // Le pide al navegador que trate estos datos como permanentes. Sin esto,
+  // Safari en iOS borra el almacenamiento de un sitio tras siete días sin
+  // visitas — justo el escenario de quien captura una semana y se ocupa.
+  // Se concede casi siempre cuando la app está agregada a la pantalla de inicio.
+  try {
+    if (navigator.storage && navigator.storage.persist && navigator.storage.persisted) {
+      const yaEsPermanente = await navigator.storage.persisted();
+      if (!yaEsPermanente) await navigator.storage.persist();
+    }
+  } catch (_) { /* no todos los navegadores lo soportan; no es motivo de falla */ }
+
   pintar();
 })();
 </script>
