@@ -727,11 +727,21 @@ function limitesPeriodo(ancla, ciclo, desplazamiento) {
 }
 
 /**
- * Índice del periodo que contiene la fecha de hoy.
- * @param {string} ancla @param {string} ciclo @returns {number}
+ * Índice del periodo que contiene una fecha dada.
+ * @param {string} fechaISO
+ * @returns {number} negativo si la fecha es anterior al ancla
  */
-function periodoActual(ancla, ciclo) {
-  const a = aFecha(ancla), t = hoy();
+function periodoDe(fechaISO) {
+  return periodoActual(datos.perfil.ancla, datos.perfil.ciclo, aFecha(fechaISO));
+}
+
+/**
+ * Índice del periodo que contiene la fecha indicada (hoy por omisión).
+ * @param {string} ancla @param {string} ciclo @param {Date} [fecha]
+ * @returns {number}
+ */
+function periodoActual(ancla, ciclo, fecha) {
+  const a = aFecha(ancla), t = fecha || hoy();
   if (ciclo === "mensual") {
     let n = (t.getFullYear() - a.getFullYear()) * 12 + (t.getMonth() - a.getMonth());
     if (t.getDate() < a.getDate()) n--;
@@ -1205,6 +1215,49 @@ function ciclosHTML(actual) {
   ).join("");
 }
 
+/**
+ * Si el periodo visible está vacío pero hay movimientos en otros,
+ * lo dice y ofrece saltar al último. Sin esto, una importación de
+ * meses pasados parece haberse perdido.
+ * @returns {string} HTML, o cadena vacía si no aplica
+ */
+function avisoOtrosPeriodos() {
+  const enPeriodo = movimientosDe(desfase).length;
+  if (enPeriodo) return "";
+
+  // Primero: ¿el filtro de ámbito es lo que está escondiendo todo?
+  if (usaAmbitos() && ambitoActivo() !== "todo") {
+    const { inicio, fin } = limitesPeriodo(datos.perfil.ancla, datos.perfil.ciclo, desfase);
+    const i = aISO(inicio), f = aISO(fin);
+    const sinFiltro = datos.movimientos.filter(m => m.fecha >= i && m.fecha <= f);
+    if (sinFiltro.length) {
+      const otro = ambitoActivo() === "personal" ? "negocio" : "personal";
+      return '<div class="tarjeta"><div class="nota">' + svg("info", 18) +
+        "<div><strong>Hay " + sinFiltro.length +
+        (sinFiltro.length === 1 ? " movimiento" : " movimientos") + " en este periodo, " +
+        "pero están en " + (otro === "negocio" ? "Negocio" : "Personal") +
+        " y estás viendo " + (ambitoActivo() === "negocio" ? "Negocio" : "Personal") + ".</div></div>" +
+        '<button class="btn btn--fantasma btn--bloque" type="button" data-ambito="todo" ' +
+        'style="margin-top:var(--s-4)">Ver todo junto</button></div>';
+    }
+  }
+
+  const todos = filtrarAmbito(datos.movimientos);
+  if (!todos.length) return "";
+  const ultima = todos.map(m => m.fecha).sort().pop();
+  const destino = periodoDe(ultima);
+  if (destino === desfase) return "";
+  const { inicio, fin } = limitesPeriodo(datos.perfil.ancla, datos.perfil.ciclo, destino);
+  return '<div class="tarjeta"><div class="nota">' + svg("info", 18) +
+    "<div><strong>Tienes " + todos.length +
+    (todos.length === 1 ? " movimiento" : " movimientos") + " en otros periodos.</strong> " +
+    "El más reciente es del " + esc(FMT_DIA.format(aFecha(ultima))) + "." +
+    "</div></div>" +
+    '<button class="btn btn--fantasma btn--bloque" type="button" data-saltar="' + destino + '" ' +
+    'style="margin-top:var(--s-4)">Ver el periodo del ' +
+    esc(FMT_DIA.format(inicio)) + " al " + esc(FMT_DIA.format(fin)) + "</button></div>";
+}
+
 /* ---------- Resumen ---------- */
 
 function vistaResumen() {
@@ -1255,6 +1308,7 @@ function vistaResumen() {
       esc(rebasadas.map(nombreCategoria).join(", ")) + ".</div></div></div>";
   }
 
+  html += avisoOtrosPeriodos();
   html += '<div class="tarjeta"><h2 class="tarjeta__titulo">En qué se fue</h2>';
   if (!topGastos.length) {
     html += '<div class="vacio"><div class="vacio__hoja">' + svg("hoja", 36) + "</div>" +
@@ -1313,7 +1367,8 @@ function vistaMovimientos() {
     html += '<div class="vacio"><div class="vacio__hoja">' + svg("hoja", 36) + "</div>" +
       '<p class="vacio__titulo">Sin movimientos en este periodo</p>' +
       '<p class="vacio__texto">Anota cada gasto en el momento. Toma diez segundos y es lo que hace que todo lo demás funcione.</p>' +
-      '<button class="btn" type="button" data-abrir="movimiento">Registrar el primero</button></div></div>';
+      '<button class="btn" type="button" data-abrir="movimiento">Registrar el primero</button></div></div>' +
+      avisoOtrosPeriodos();
     return html;
   }
 
@@ -3146,6 +3201,14 @@ async function abrirZip(b) {
   return salida;
 }
 
+/** Índice de columna base 0 → letra de Excel (0 = A, 5 = F). */
+function letraColumna(n) {
+  let s = "";
+  n += 1;
+  while (n > 0) { const r = (n - 1) % 26; s = String.fromCharCode(65 + r) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
 /** Convierte una referencia de celda (C17) en índice de columna base 0. */
 function indiceColumna(ref) {
   const letras = ref.match(/^[A-Z]+/)[0];
@@ -3413,12 +3476,28 @@ function pasoMapeo(caja) {
                       return IMP.filas.slice(IMP.iEnc + 1).some(f => String((f || [])[c.i] || "").trim());
                     });
 
+  // Muestra de los primeros valores reales de cada columna. Es lo único
+  // que permite distinguir dos columnas que se llaman igual —en un archivo
+  // con bloques en paralelo hay dos CANTIDAD y dos CONCEPTO— y evita
+  // importar la columna equivocada sin darse cuenta.
+  IMP.columnas.forEach(c => {
+    c.muestra = IMP.filas.slice(IMP.iEnc + 1)
+      .map(f => String((f || [])[c.i] || "").trim())
+      .filter(Boolean).slice(0, 3).join(", ");
+  });
+
   const opciones = (sel) => '<option value="-1">— ninguna —</option>' +
     IMP.columnas.map(c => '<option value="' + c.i + '"' + (c.i === sel ? " selected" : "") + ">" +
-      esc(c.nombre) + "</option>").join("");
+      esc(letraColumna(c.i) + " · " + c.nombre) +
+      (c.muestra ? esc(" — " + c.muestra.slice(0, 34)) : "") + "</option>").join("");
 
-  // Sugerencia por nombre de encabezado
-  const buscar = re => { const c = IMP.columnas.find(x => re.test(x.nombre.toLowerCase())); return c ? c.i : -1; };
+  // Sugerencia por nombre de encabezado. Si más de una columna coincide,
+  // no se elige ninguna: es preferible que la persona decida a que el
+  // asistente adivine mal en silencio.
+  const buscar = re => {
+    const c = IMP.columnas.filter(x => re.test(x.nombre.toLowerCase()));
+    return c.length === 1 ? c[0].i : -1;
+  };
   if (IMP.mapa.monto === -1) IMP.mapa.monto = buscar(/cantidad|monto|importe|total/);
   if (IMP.mapa.concepto === -1) IMP.mapa.concepto = buscar(/concepto|descrip|detalle/);
   if (IMP.mapa.fecha === -1) IMP.mapa.fecha = buscar(/fecha|d[ií]a/);
@@ -3433,6 +3512,15 @@ function pasoMapeo(caja) {
           t + "</button>").join("") + "</div>" +
       '<p class="campo__ayuda">Si tu archivo tiene ingresos y gastos en bloques separados, ' +
         "impórtalos de uno en uno.</p></div>" +
+    (() => {
+      const nombres = IMP.columnas.map(c => c.nombre.toLowerCase());
+      const repetidos = [...new Set(nombres.filter((n, i) => nombres.indexOf(n) !== i))];
+      return repetidos.length
+        ? '<div class="nota nota--alerta" style="margin-bottom:var(--s-4)">' + svg("alerta", 18) +
+          "<div>Tu hoja tiene columnas con el mismo nombre (" + esc(repetidos.join(", ")) +
+          "). Fíjate en la letra y en los valores de ejemplo para elegir la correcta.</div></div>"
+        : "";
+    })() +
     '<div class="campo"><label for="mp-monto">Monto <span style="color:var(--alerta)">*</span></label>' +
       '<select class="entrada" id="mp-monto">' + opciones(IMP.mapa.monto) + "</select></div>" +
     '<div class="campo"><label for="mp-concepto">Concepto</label>' +
@@ -3665,6 +3753,18 @@ function pasoResumen(caja) {
     datos.ultimaImportacion = { ids, cuando: Date.now(), esCobrar: !!IMP.listos.esCobrar };
     await persistir();
     cerrarHoja();
+
+    // Llevar a la persona a donde quedaron los movimientos. Si se importa
+    // un mes pasado, dejarla en el periodo actual la haría creer que no
+    // se guardó nada.
+    if (IMP.listos.esCobrar) {
+      vistaActual = "deudas";
+      datos.pestanaBalance = "cobrar";
+    } else if (ids.length) {
+      const ultima = IMP.listos.registros.map(m => m.fecha).sort().pop();
+      desfase = periodoDe(ultima);
+      vistaActual = "movimientos";
+    }
     avisar("Se importaron " + ids.length + " registros");
     pintar();
   });
@@ -3702,6 +3802,9 @@ document.addEventListener("click", async e => {
     window.scrollTo(0, 0);
     return;
   }
+
+  const salto = t.closest("[data-saltar]");
+  if (salto) { desfase = Number(salto.dataset.saltar); pintar(); window.scrollTo(0, 0); return; }
 
   const per = t.closest("[data-periodo]");
   if (per) {
