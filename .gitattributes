@@ -1,0 +1,9 @@
+﻿# Normaliza los saltos de linea al guardar en el repositorio.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.pdf binary
+*.xlsx binary
