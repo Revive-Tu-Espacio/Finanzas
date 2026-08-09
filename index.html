@@ -611,24 +611,158 @@ const Almacen = (() => {
    ---------------------------------------------------------------- */
 
 const CATEGORIAS_GASTO = [
-  { id: "comida",     nombre: "Comida" },
-  { id: "transporte", nombre: "Transporte" },
-  { id: "casa",       nombre: "Casa y servicios" },
-  { id: "salud",      nombre: "Salud" },
-  { id: "escuela",    nombre: "Escuela" },
-  { id: "deuda",      nombre: "Pago de deuda" },
-  { id: "ropa",       nombre: "Ropa" },
-  { id: "gustos",     nombre: "Gustos" },
-  { id: "otros",      nombre: "Otros" }
+  // Personales. Se mantienen los identificadores originales para no
+  // romper lo ya capturado.
+  { id: "comida",     nombre: "Comida",            amb: "personal" },
+  { id: "transporte", nombre: "Transporte",        amb: "personal" },
+  { id: "casa",       nombre: "Casa y servicios",  amb: "personal" },
+  { id: "salud",      nombre: "Salud",             amb: "personal" },
+  { id: "escuela",    nombre: "Escuela",           amb: "personal" },
+  { id: "deuda",      nombre: "Pago de deuda",     amb: "ambos" },
+  { id: "ropa",       nombre: "Ropa",              amb: "personal" },
+  { id: "gustos",     nombre: "Gustos",            amb: "personal" },
+  { id: "otros",      nombre: "Otros",             amb: "personal" },
+  // Del negocio. Solo aparecen cuando el ámbito activo es Negocio.
+  { id: "nomina",     nombre: "Nómina y sueldos",       amb: "negocio" },
+  { id: "oficina",    nombre: "Renta y oficina",        amb: "negocio" },
+  { id: "servicios",  nombre: "Servicios y telefonía",  amb: "negocio" },
+  { id: "software",   nombre: "Software y suscripciones", amb: "negocio" },
+  { id: "marketing",  nombre: "Publicidad y marketing", amb: "negocio" },
+  { id: "tramites",   nombre: "Trámites y derechos",    amb: "negocio" },
+  { id: "impuestos",  nombre: "Impuestos",              amb: "negocio" },
+  { id: "honorarios", nombre: "Honorarios y servicios profesionales", amb: "negocio" },
+  { id: "insumos",    nombre: "Insumos y papelería",    amb: "negocio" },
+  { id: "viaticos",   nombre: "Viáticos y representación", amb: "negocio" },
+  { id: "envios",     nombre: "Envíos y mensajería",    amb: "negocio" },
+  { id: "comisiones", nombre: "Comisiones y cuotas",    amb: "negocio" },
+  { id: "otros_neg",  nombre: "Otros del negocio",      amb: "negocio" }
 ];
 
 const CATEGORIAS_INGRESO = [
-  { id: "sueldo",  nombre: "Sueldo" },
-  { id: "negocio", nombre: "Negocio" },
-  { id: "apoyo",   nombre: "Apoyo o ayuda" },
-  { id: "extra",   nombre: "Trabajo extra" },
-  { id: "otro_in", nombre: "Otro ingreso" }
+  { id: "sueldo",  nombre: "Sueldo",           amb: "personal" },
+  { id: "negocio", nombre: "Negocio",          amb: "ambos" },
+  { id: "apoyo",   nombre: "Apoyo o ayuda",    amb: "personal" },
+  { id: "extra",   nombre: "Trabajo extra",    amb: "personal" },
+  { id: "otro_in", nombre: "Otro ingreso",     amb: "personal" },
+  { id: "servicios_in", nombre: "Servicios prestados", amb: "negocio" },
+  { id: "comision_in",  nombre: "Comisiones",        amb: "negocio" },
+  { id: "intereses_in", nombre: "Intereses",         amb: "negocio" },
+  { id: "renta_in",     nombre: "Rentas",            amb: "negocio" },
+  { id: "otro_neg_in",  nombre: "Otro del negocio",  amb: "negocio" }
 ];
+
+/**
+ * Catálogo aplicable según el tipo de movimiento y el ámbito.
+ * Si el perfil no separa personal de negocio, solo se muestran las
+ * personales: al que no tiene negocio, veintitrés opciones le estorban.
+ * @param {'gasto'|'ingreso'} tipo
+ * @param {'personal'|'negocio'} [ambito]
+ * @returns {Array<{id:string,nombre:string}>}
+ */
+function categoriasDe(tipo, ambito) {
+  const base = tipo === "ingreso" ? CATEGORIAS_INGRESO : CATEGORIAS_GASTO;
+  if (!usaAmbitos()) return base.filter(c => c.amb !== "negocio");
+  const a = ambito || "personal";
+  return base.filter(c => c.amb === "ambos" || c.amb === a);
+}
+
+/* --- Clasificación por el concepto -----------------------------
+   Tabla de correspondencias entre lo que la gente escribe y la
+   categoría que le toca. Se revisa en orden y gana la primera que
+   coincide, así que lo específico va antes que lo genérico.
+   Lo que no coincide con nada NO se inventa: queda en "Otros".      */
+
+/** Quita acentos y baja a minúsculas para poder comparar. */
+function normalizar(s) {
+  return String(s || "").toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+}
+
+const REGLAS_CATEGORIA = [
+  // Trámites y actos jurídicos: primero, porque "copias certificadas"
+  // o "registro público" contienen palabras que caen en otras reglas.
+  [/registro publico|rpp\b|notari|copias? certificadas?|protocoliza|escritura|apostilla|legalizacion|tramite|derechos? de|catastro|folio real/, { negocio: "tramites", personal: "otros" }],
+  [/impuesto|\bsat\b|\bisr\b|\biva\b|predial|tenencia|nomina estatal|contribucion|declaracion anual/, { negocio: "impuestos", personal: "otros" }],
+  [/nomina|sueldo|salario|aguinaldo|finiquito|\braya\b|prima vacacional|imss|infonavit/, { negocio: "nomina", personal: "otros" }],
+  [/software|\bsaas\b|licencia|suscripcion|hosting|dominio|servidor|nubarium|adobe|microsoft|office|google workspace|zoom|canva|dropbox|openai|anthropic/, { negocio: "software", personal: "gustos" }],
+  [/publicidad|marketing|\bads\b|campana|anuncio|volante|lona|redes sociales|community/, { negocio: "marketing", personal: "otros" }],
+  [/envio|paqueteria|mensajeria|\bdhl\b|fedex|estafeta|redpack|correos/, { negocio: "envios", personal: "otros" }],
+  [/comision|cuota|membresia|anualidad|colegio de|camara de/, { negocio: "comisiones", personal: "otros" }],
+  [/honorario|asesor|consultor|abogad|contad|auditor|perito|despacho/, { negocio: "honorarios", personal: "otros" }],
+  [/papeleria|toner|tinta|hojas?|cartucho|insumo|consumible|aseo|limpieza|jabon|cloro|papel/, { negocio: "insumos", personal: "casa" }],
+  [/viatico|hospedaje|hotel|vuelo|avion|representacion|comida de trabajo/, { negocio: "viaticos", personal: "gustos" }],
+
+  // Deuda antes que nada financiero genérico.
+  [/pago de tarjeta|tarjeta de credito|prestamo|credito|abono a|mensualidad|financiamiento|interes(es)? de/, { negocio: "deuda", personal: "deuda" }],
+
+  // Vivienda y servicios. La telefonía va primero porque frases como
+  // "renta de plan telcel" son servicio, no arrendamiento.
+  [/\bcfe\b|luz|electricidad|agua potable|\bgas\b|telmex|megacable|totalplay|izzi|telcel|at&t|movistar|internet|telefon|celular|plan de datos|linea movil/, { negocio: "servicios", personal: "casa" }],
+  [/renta|alquiler|arrendamiento|oficina|local comercial/, { negocio: "oficina", personal: "casa" }],
+
+  // Transporte.
+  [/gasolina|combustible|diesel|magna|premium|verificacion|taller|refaccion|llanta|afinacion/, { negocio: "viaticos", personal: "transporte" }],
+  [/uber|didi|taxi|pasaje|camion|autobus|metro|estacionamiento|caseta|peaje|transporte/, { negocio: "viaticos", personal: "transporte" }],
+
+  // Salud y educación.
+  [/medic|farmacia|doctor|dentista|hospital|consulta|analisis|laboratorio|lente|receta|vacuna/, { negocio: "otros_neg", personal: "salud" }],
+  [/escuela|colegiatura|inscripcion|utiles|uniforme|curso|diplomado|capacitacion|libro/, { negocio: "otros_neg", personal: "escuela" }],
+
+  // Consumo personal.
+  [/despensa|super|abarrote|mandado|tortilla|carne|verdura|fruta|pollo|leche|comida|almuerzo|desayuno|cena|restaurant|fonda|taqueria/, { negocio: "viaticos", personal: "comida" }],
+  [/zapato|ropa|camisa|pantalon|calzado|tenis|vestido|blusa|chamarra/, { negocio: "otros_neg", personal: "ropa" }],
+  [/cafe|starbucks|cine|netflix|spotify|salida|fiesta|regalo|obsequio|cumpleanos|juguete|entretenimiento|bar\b|cerveza/, { negocio: "viaticos", personal: "gustos" }],
+  [/mascota|veterinari|croquetas/, { negocio: "otros_neg", personal: "otros" }]
+];
+
+/**
+ * Sugiere una categoría a partir del texto del concepto.
+ *
+ * Es una correspondencia por palabras clave, no un modelo: cuando no
+ * reconoce nada devuelve "Otros" en lugar de arriesgar una categoría
+ * equivocada, porque un gasto mal clasificado es peor que uno sin
+ * clasificar — el primero se esconde en una gráfica que parece correcta.
+ *
+ * @param {string} concepto texto libre escrito por la persona
+ * @param {'gasto'|'ingreso'} [tipo='gasto']
+ * @param {'personal'|'negocio'} [ambito='personal']
+ * @returns {{id:string, seguro:boolean}} categoría sugerida y si hubo coincidencia
+ * @example sugerirCategoria("Pago de Nubarium", "gasto", "negocio")
+ *          // { id: "software", seguro: true }
+ * @example sugerirCategoria("Tapalpa")  // { id: "otros", seguro: false }
+ */
+function sugerirCategoria(concepto, tipo, ambito) {
+  const t = tipo || "gasto";
+  const a = ambito === "negocio" ? "negocio" : "personal";
+  const omision = t === "ingreso"
+    ? (a === "negocio" ? "otro_neg_in" : "otro_in")
+    : (a === "negocio" ? "otros_neg" : "otros");
+
+  const texto = normalizar(concepto);
+  if (!texto) return { id: omision, seguro: false };
+
+  if (t === "ingreso") {
+    if (/comision/.test(texto)) return { id: a === "negocio" ? "comision_in" : "negocio", seguro: true };
+    if (/interes/.test(texto)) return { id: a === "negocio" ? "intereses_in" : "otro_in", seguro: true };
+    if (/renta|arrendamiento/.test(texto)) return { id: a === "negocio" ? "renta_in" : "otro_in", seguro: true };
+    if (/honorario|servicio|asesor|cumplimiento|escritura|notari/.test(texto))
+      return { id: a === "negocio" ? "servicios_in" : "extra", seguro: true };
+    if (/sueldo|salario|nomina|quincena/.test(texto)) return { id: "sueldo", seguro: true };
+    if (/apoyo|beca|ayuda|pension|remesa/.test(texto)) return { id: "apoyo", seguro: true };
+    if (/venta|negocio|hotel/.test(texto)) return { id: "negocio", seguro: true };
+    return { id: omision, seguro: false };
+  }
+
+  const GENERICAS = ["otros", "otros_neg", "otro_in", "otro_neg_in"];
+  for (const [re, destino] of REGLAS_CATEGORIA) {
+    if (!re.test(texto)) continue;
+    const id = destino[a] || omision;
+    // Una regla que desemboca en "Otros" no clasificó nada: se reporta
+    // como no reconocido para que la persona sepa que falta revisarlo.
+    return { id, seguro: !GENERICAS.includes(id) };
+  }
+  return { id: omision, seguro: false };
+}
 
 const METODOS = ["Efectivo", "Tarjeta", "Transferencia"];
 
@@ -777,9 +911,73 @@ function articuloCiclo(ciclo, mayus) {
 /** Cuántos periodos del ciclo caben en un mes; sirve para anualizar cifras. */
 function periodosPorMes(ciclo) { return periodosPorAnio(ciclo) / 12; }
 
-/** Movimientos dentro del periodo indicado. */
+/* --- Ventana de revisión ---------------------------------------
+   El ciclo de cobro y la ventana con la que se revisa no tienen por
+   qué coincidir: alguien puede cobrar cada semana y querer ver el
+   mes completo. Estas funciones separan ambas cosas.               */
+
+/** @returns {boolean} si el tablero se está viendo por mes natural */
+function vistaMensual() {
+  return !!(datos.perfil && datos.perfil.vistaPeriodo === "mes" && datos.perfil.ciclo !== "mensual");
+}
+
+/**
+ * Límites de la ventana visible.
+ * @param {number} off 0 = ventana actual, -1 = la anterior
+ * @returns {{inicio:Date, fin:Date}}
+ */
+function limitesVista(off) {
+  if (!vistaMensual()) return limitesPeriodo(datos.perfil.ancla, datos.perfil.ciclo, off);
+  const t = hoy();
+  return {
+    inicio: new Date(t.getFullYear(), t.getMonth() + off, 1),
+    fin: new Date(t.getFullYear(), t.getMonth() + off + 1, 0)
+  };
+}
+
+/** Desplazamiento máximo permitido: no se navega al futuro. */
+function topeDesfase() {
+  return vistaMensual() ? 0 : periodoActual(datos.perfil.ancla, datos.perfil.ciclo);
+}
+
+/** En qué ventana cae una fecha dada. */
+function desfaseDe(fechaISO) {
+  if (!vistaMensual()) return periodoDe(fechaISO);
+  const t = hoy(), f = aFecha(fechaISO);
+  return (f.getFullYear() - t.getFullYear()) * 12 + (f.getMonth() - t.getMonth());
+}
+
+/** Título y rango legibles de la ventana visible. */
+function rotuloVista(off) {
+  const { inicio, fin } = limitesVista(off);
+  const tope = topeDesfase();
+  if (vistaMensual()) {
+    const nombre = FMT_MES.format(inicio);
+    return {
+      titulo: off === 0 ? "Este mes" : off === -1 ? "Mes pasado" : "Mes",
+      rango: nombre.charAt(0).toUpperCase() + nombre.slice(1)
+    };
+  }
+  return {
+    titulo: off === tope ? "Periodo actual" : off > tope ? "Periodo futuro" : "Periodo pasado",
+    rango: FMT_DIA.format(inicio) + " – " + FMT_DIA.format(fin)
+  };
+}
+
+/** Selector de ventana: mi ciclo o mes natural. */
+function barraVistaPeriodo() {
+  if (!datos.perfil || datos.perfil.ciclo === "mensual") return "";
+  const mes = vistaMensual();
+  return '<div class="segmentos" role="group" aria-label="Ventana de revisión" ' +
+    'style="margin-bottom:var(--s-4)">' +
+    '<button type="button" data-vista="ciclo" aria-pressed="' + (!mes) + '">Por ' +
+      nombreCiclo(datos.perfil.ciclo) + "</button>" +
+    '<button type="button" data-vista="mes" aria-pressed="' + mes + '">Por mes</button></div>';
+}
+
+/** Movimientos dentro de la ventana indicada. */
 function movimientosDe(desplazamiento) {
-  const { inicio, fin } = limitesPeriodo(datos.perfil.ancla, datos.perfil.ciclo, desplazamiento);
+  const { inicio, fin } = limitesVista(desplazamiento);
   const i = aISO(inicio), f = aISO(fin);
   return filtrarAmbito(datos.movimientos.filter(m => m.fecha >= i && m.fecha <= f));
 }
@@ -1227,7 +1425,7 @@ function avisoOtrosPeriodos() {
 
   // Primero: ¿el filtro de ámbito es lo que está escondiendo todo?
   if (usaAmbitos() && ambitoActivo() !== "todo") {
-    const { inicio, fin } = limitesPeriodo(datos.perfil.ancla, datos.perfil.ciclo, desfase);
+    const { inicio, fin } = limitesVista(desfase);
     const i = aISO(inicio), f = aISO(fin);
     const sinFiltro = datos.movimientos.filter(m => m.fecha >= i && m.fecha <= f);
     if (sinFiltro.length) {
@@ -1245,9 +1443,9 @@ function avisoOtrosPeriodos() {
   const todos = filtrarAmbito(datos.movimientos);
   if (!todos.length) return "";
   const ultima = todos.map(m => m.fecha).sort().pop();
-  const destino = periodoDe(ultima);
+  const destino = desfaseDe(ultima);
   if (destino === desfase) return "";
-  const { inicio, fin } = limitesPeriodo(datos.perfil.ancla, datos.perfil.ciclo, destino);
+  const { inicio, fin } = limitesVista(destino);
   return '<div class="tarjeta"><div class="nota">' + svg("info", 18) +
     "<div><strong>Tienes " + todos.length +
     (todos.length === 1 ? " movimiento" : " movimientos") + " en otros periodos.</strong> " +
@@ -1263,8 +1461,9 @@ function avisoOtrosPeriodos() {
 function vistaResumen() {
   const p = datos.perfil;
   const t = totales(desfase);
-  const { inicio, fin } = limitesPeriodo(p.ancla, p.ciclo, desfase);
-  const maxDesfase = periodoActual(p.ancla, p.ciclo);
+  const { inicio, fin } = limitesVista(desfase);
+  const maxDesfase = topeDesfase();
+  const rot = rotuloVista(desfase);
   const negativo = t.saldo < 0;
 
   const conPresupuesto = Object.keys(datos.presupuesto).filter(k => datos.presupuesto[k] > 0);
@@ -1275,11 +1474,10 @@ function vistaResumen() {
 
   let html =
     '<h1 class="sr-only">Resumen del periodo</h1>' +
+    barraVistaPeriodo() +
     '<div class="periodo">' +
       '<button type="button" data-periodo="-1" aria-label="Periodo anterior">' + svg("atras") + "</button>" +
-      '<div class="periodo__etiqueta"><strong>' +
-        (desfase === maxDesfase ? "Periodo actual" : (desfase > maxDesfase ? "Periodo futuro" : "Periodo pasado")) +
-      "</strong>" + FMT_DIA.format(inicio) + " – " + FMT_DIA.format(fin) + "</div>" +
+      '<div class="periodo__etiqueta"><strong>' + rot.titulo + "</strong>" + rot.rango + "</div>" +
       '<button type="button" data-periodo="1" aria-label="Periodo siguiente"' +
         (desfase >= maxDesfase ? " disabled" : "") + ">" + svg("adelante") + "</button>" +
     "</div>" +
@@ -1350,15 +1548,15 @@ function vistaResumen() {
 function vistaMovimientos() {
   const p = datos.perfil;
   const movs = movimientosDe(desfase).slice().sort((a, b) => b.fecha.localeCompare(a.fecha) || b.creado - a.creado);
-  const { inicio, fin } = limitesPeriodo(p.ancla, p.ciclo, desfase);
-  const maxDesfase = periodoActual(p.ancla, p.ciclo);
+  const maxDesfase = topeDesfase();
+  const rot = rotuloVista(desfase);
 
   let html =
     "<h1 class=\"sr-only\">Movimientos del periodo</h1>" +
+    barraVistaPeriodo() +
     '<div class="periodo">' +
       '<button type="button" data-periodo="-1" aria-label="Periodo anterior">' + svg("atras") + "</button>" +
-      '<div class="periodo__etiqueta"><strong>Movimientos</strong>' +
-        FMT_DIA.format(inicio) + " – " + FMT_DIA.format(fin) + "</div>" +
+      '<div class="periodo__etiqueta"><strong>Movimientos</strong>' + rot.rango + "</div>" +
       '<button type="button" data-periodo="1" aria-label="Periodo siguiente"' +
         (desfase >= maxDesfase ? " disabled" : "") + ">" + svg("adelante") + "</button>" +
     "</div><div class=\"tarjeta\">";
@@ -1701,6 +1899,19 @@ function vistaAjustes() {
     "</div>" +
 
     '<div class="tarjeta">' +
+      '<h2 class="tarjeta__titulo">Reclasificar movimientos</h2>' +
+      '<p style="font-size:14px;color:var(--tinta-suave);margin:0 0 var(--s-4)">' +
+        "Revisa los movimientos que quedaron en Otros y asígnales categoría según lo que " +
+        "dice su concepto. Lo que clasificaste a mano no se toca.</p>" +
+      '<button class="btn btn--bloque" type="button" id="btn-reclasificar">Revisar propuesta</button>' +
+      (datos.ultimaReclasificacion && datos.ultimaReclasificacion.length
+        ? '<button class="btn btn--peligro btn--bloque" type="button" id="btn-deshacer-rc" ' +
+          'style="margin-top:var(--s-3)">Revertir la última reclasificación (' +
+          datos.ultimaReclasificacion.length + ")</button>"
+        : "") +
+    "</div>" +
+
+    '<div class="tarjeta">' +
       '<h2 class="tarjeta__titulo">Personal y negocio</h2>' +
       '<p style="font-size:14px;color:var(--tinta-suave);margin:0 0 var(--s-4)">' +
         "Si tienes un negocio, sepáralo de tus gastos personales. Aparece un selector al " +
@@ -1824,7 +2035,7 @@ function hojaMovimiento() {
     let ambMov = ambitoActivo() === "negocio" ? "negocio" : "personal";
 
     function pintarCats() {
-      const lista = tipo === "gasto" ? CATEGORIAS_GASTO : CATEGORIAS_INGRESO;
+      const lista = categoriasDe(tipo, ambMov);
       if (!lista.some(c => c.id === catSel)) catSel = lista[0].id;
       caja.querySelector("#cats").innerHTML = lista.map(c =>
         '<button type="button" class="ficha" data-cat="' + c.id + '" aria-pressed="' + (c.id === catSel) + '">' +
@@ -1844,6 +2055,7 @@ function hojaMovimiento() {
       if (ba) {
         ambMov = ba.dataset.ambmov;
         caja.querySelectorAll("[data-ambmov]").forEach(x => x.setAttribute("aria-pressed", String(x === ba)));
+        pintarCats();
         return;
       }
       const bc = e.target.closest("[data-cat]");
@@ -1851,6 +2063,17 @@ function hojaMovimiento() {
         catSel = bc.dataset.cat;
         caja.querySelectorAll("[data-cat]").forEach(b => b.setAttribute("aria-pressed", String(b === bc)));
       }
+    });
+
+    let catManual = false;
+    caja.addEventListener("click", e => { if (e.target.closest("[data-cat]")) catManual = true; });
+    caja.querySelector("#m-nota").addEventListener("input", e => {
+      if (catManual) return;
+      const s = sugerirCategoria(e.target.value, tipo, ambMov);
+      if (!s.seguro || s.id === catSel) return;
+      catSel = s.id;
+      caja.querySelectorAll("[data-cat]").forEach(b =>
+        b.setAttribute("aria-pressed", String(b.dataset.cat === catSel)));
     });
 
     caja.querySelector("#form-mov").addEventListener("submit", async e => {
@@ -2082,7 +2305,11 @@ function rangoDe(clave, desde, hasta) {
   const etiquetaFechas = (a, b) => FMT_DIA.format(a) + " al " + FMT_DIA.format(b) + " de " + b.getFullYear();
 
   if (clave === "periodo") {
-    const { inicio, fin } = limitesPeriodo(datos.perfil.ancla, datos.perfil.ciclo, desfase);
+    const { inicio, fin } = limitesVista(desfase);
+    if (vistaMensual()) {
+      const nm = FMT_MES.format(inicio);
+      return { i: aISO(inicio), f: aISO(fin), etq: nm.charAt(0).toUpperCase() + nm.slice(1) };
+    }
     return datos.perfil.ciclo === "diario"
       ? { i: aISO(inicio), f: aISO(fin), etq: "Día " + FMT_LARGO.format(inicio) }
       : { i: aISO(inicio), f: aISO(fin), etq: cap(nombreCiclo(datos.perfil.ciclo)) + " del " + etiquetaFechas(inicio, fin) };
@@ -2517,7 +2744,9 @@ const GRUPOS_EGRESO = [
   { titulo: "Gastos esenciales de subsistencia", cats: ["comida", "casa", "transporte"] },
   { titulo: "Salud y educación", cats: ["salud", "escuela"] },
   { titulo: "Compromisos financieros", cats: ["deuda"] },
-  { titulo: "Gastos personales y discrecionales", cats: ["ropa", "gustos", "otros"] }
+  { titulo: "Gastos personales y discrecionales", cats: ["ropa", "gustos", "otros"] },
+  { titulo: "Operación del negocio", cats: ["nomina", "oficina", "servicios", "software", "insumos", "envios"] },
+  { titulo: "Comercial y administrativo", cats: ["marketing", "tramites", "impuestos", "honorarios", "comisiones", "viaticos", "otros_neg"] }
 ];
 
 /**
@@ -2814,10 +3043,95 @@ function exportarExcel(r) {
   avisar("Estado financiero descargado");
 }
 
+
+/**
+ * Propone recategorizar los movimientos que quedaron sin clasificar.
+ * Solo toca los que están en "Otros": lo que la persona eligió a mano
+ * no se sobrescribe nunca.
+ * @returns {Array<{mov:object, destino:string}>}
+ */
+function proponerReclasificacion() {
+  const genericas = ["otros", "otros_neg", "otro_in", "otro_neg_in"];
+  const propuestas = [];
+  datos.movimientos.forEach(m => {
+    if (!genericas.includes(m.categoria)) return;
+    if (!String(m.nota || "").trim()) return;
+    const s = sugerirCategoria(m.nota, m.tipo, m.ambito || "personal");
+    if (s.seguro && s.id !== m.categoria) propuestas.push({ mov: m, destino: s.id });
+  });
+  return propuestas;
+}
+
+/** Hoja de revisión y aplicación de la reclasificación. */
+function hojaReclasificar() {
+  const props = proponerReclasificacion();
+  if (!props.length) {
+    abrirHoja("Reclasificar",
+      '<div class="vacio" style="padding:var(--s-4) 0"><div class="vacio__hoja">' + svg("hoja", 36) + "</div>" +
+      '<p class="vacio__titulo">No hay nada que reclasificar</p>' +
+      '<p class="vacio__texto">Todos tus movimientos con concepto ya tienen una categoría ' +
+      "que reconozco, o los clasificaste tú a mano.</p></div>");
+    return;
+  }
+
+  // Agrupado por categoría destino: es más fácil revisar diez renglones
+  // que van a "Trámites" juntos que treinta sueltos.
+  const grupos = {};
+  props.forEach(pr => { (grupos[pr.destino] = grupos[pr.destino] || []).push(pr); });
+
+  const cuerpo =
+    '<p style="font-size:15px;color:var(--tinta-suave);margin:0 0 var(--s-4)">' +
+      "Encontré " + props.length + (props.length === 1 ? " movimiento" : " movimientos") +
+      " en Otros cuyo concepto reconozco. Revisa antes de aplicar: solo se tocan los " +
+      "que están sin clasificar.</p>" +
+    Object.entries(grupos).sort((a, b) => b[1].length - a[1].length).map(([cid, lista]) =>
+      '<div style="margin-bottom:var(--s-5)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;' +
+          'border-bottom:1px solid var(--linea);padding-bottom:6px;margin-bottom:var(--s-2)">' +
+          '<strong style="font-size:15px">' + esc(nombreCategoria(cid)) + "</strong>" +
+          '<span class="pastilla">' + lista.length + "</span></div>" +
+        lista.slice(0, 8).map(pr =>
+          '<div style="font-size:14px;color:var(--tinta-suave);padding:3px 0;overflow:hidden;' +
+            'text-overflow:ellipsis;white-space:nowrap">' + esc(pr.mov.nota) +
+            ' <span class="num">' + fmt(pr.mov.monto, true) + "</span></div>").join("") +
+        (lista.length > 8 ? '<div style="font-size:13px;color:var(--tinta-suave);padding-top:4px">' +
+          "y " + (lista.length - 8) + " más</div>" : "") +
+      "</div>").join("") +
+    '<div class="btn-grupo">' +
+      '<button class="btn btn--fantasma" type="button" data-cerrar>Cancelar</button>' +
+      '<button class="btn" type="button" id="rc-aplicar">Aplicar a los ' + props.length + "</button>" +
+    "</div>";
+
+  abrirHoja("Reclasificar movimientos", cuerpo, caja => {
+    caja.querySelector("#rc-aplicar").addEventListener("click", async () => {
+      // Se guarda la categoría anterior por si hay que revertir.
+      datos.ultimaReclasificacion = props.map(pr => ({ id: pr.mov.id, antes: pr.mov.categoria }));
+      props.forEach(pr => { pr.mov.categoria = pr.destino; pr.mov.clasificado = true; });
+      await persistir();
+      cerrarHoja();
+      avisar("Se reclasificaron " + props.length + " movimientos");
+      pintar();
+    });
+  });
+}
+
+/** Revierte la última reclasificación aplicada. */
+async function deshacerReclasificacion() {
+  const u = datos.ultimaReclasificacion;
+  if (!u || !u.length) return;
+  const mapa = {};
+  u.forEach(x => { mapa[x.id] = x.antes; });
+  datos.movimientos.forEach(m => { if (mapa[m.id]) m.categoria = mapa[m.id]; });
+  datos.ultimaReclasificacion = null;
+  await persistir();
+  avisar("Reclasificación revertida");
+  pintar();
+}
+
 /** Hoja para elegir qué periodo descargar y en qué formato. */
 function hojaDescargas() {
   const opciones = [
-    ["periodo", articuloCiclo(datos.perfil.ciclo, true)],
+    ["periodo", vistaMensual() ? "Ventana actual" : articuloCiclo(datos.perfil.ciclo, true)],
     ["mes", "Este mes"],
     ["mes_pasado", "Mes pasado"],
     ["trimestre", "Últimos 3 meses"],
@@ -2911,7 +3225,7 @@ function importarJSON(archivo) {
         porCobrar: Array.isArray(entrante.porCobrar) ? entrante.porCobrar : [],
         estrategiaDeuda: entrante.estrategiaDeuda || "nieve"
       };
-      if (datos.perfil) desfase = periodoActual(datos.perfil.ancla, datos.perfil.ciclo);
+      if (datos.perfil) desfase = topeDesfase();
       await persistir();
       vistaActual = "resumen";
       pintar();
@@ -3376,7 +3690,7 @@ function claveMovimiento(m) {
 const IMP = {
   hojas: [], iHoja: 0, filas: [], iEnc: 0, columnas: [],
   mapa: { fecha: -1, concepto: -1, monto: -1, categoria: -1, ambito: -1 },
-  destino: "gasto", mes: "", mapaCats: {}, ambitoFijo: "personal", listos: []
+  destino: "gasto", mes: "", mapaCats: {}, clasif: "auto", ambitoFijo: "personal", listos: []
 };
 
 /**
@@ -3391,7 +3705,7 @@ function hojaImportar(conservarArchivo) {
   if (!conservarArchivo) { IMP.hojas = []; IMP.iHoja = 0; IMP.filas = []; IMP.iEnc = 0; }
   IMP.columnas = [];
   IMP.mapa = { fecha: -1, concepto: -1, monto: -1, categoria: -1, ambito: -1 };
-  IMP.destino = "gasto"; IMP.mes = ""; IMP.mapaCats = {}; IMP.catFija = null;
+  IMP.destino = "gasto"; IMP.mes = ""; IMP.mapaCats = {}; IMP.catFija = null; IMP.clasif = "auto";
   IMP.ambitoFijo = ambitoActivo() === "negocio" ? "negocio" : "personal";
   IMP.listos = [];
   abrirHoja("Importar desde Excel", "",
@@ -3603,10 +3917,19 @@ function pasoDetalles(caja) {
                 esc(a.nombre) + "</option>").join("") + "</select></div>";
         }).join("") + "</div>";
     } else {
-      html += '<div class="campo"><label for="mp-catfija">Categoría para todos</label>' +
-        '<select class="entrada" id="mp-catfija">' +
-          catsApp.map(a => '<option value="' + a.id + '">' + esc(a.nombre) + "</option>").join("") +
-        "</select><p class=\"campo__ayuda\">Tu archivo no trae categorías. Puedes cambiarlas después.</p></div>";
+      html += '<div class="campo"><label>¿Cómo clasifico los movimientos?</label>' +
+        '<div class="segmentos" role="group" aria-label="Clasificación">' +
+          '<button type="button" data-clasif="auto" aria-pressed="' + (IMP.clasif !== "fija") + '">Por el concepto</button>' +
+          '<button type="button" data-clasif="fija" aria-pressed="' + (IMP.clasif === "fija") + '">Una sola</button>' +
+        "</div>" +
+        '<p class="campo__ayuda">"Por el concepto" busca palabras conocidas —gasolina, nómina, ' +
+          "renta, farmacia— y asigna la categoría que corresponde. Lo que no reconoce queda en " +
+          "Otros, nunca adivina.</p></div>" +
+        '<div class="campo" id="caja-catfija"' + (IMP.clasif === "fija" ? "" : " hidden") + '>' +
+          '<label for="mp-catfija">Categoría para todos</label>' +
+          '<select class="entrada" id="mp-catfija">' +
+            catsApp.map(a => '<option value="' + a.id + '">' + esc(a.nombre) + "</option>").join("") +
+          "</select></div>";
     }
   }
 
@@ -3624,6 +3947,14 @@ function pasoDetalles(caja) {
   cuerpoPaso(caja, 4, "Últimos detalles", html);
 
   caja.querySelector("#paso-cuerpo").addEventListener("click", e => {
+    const cl = e.target.closest("[data-clasif]");
+    if (cl) {
+      IMP.clasif = cl.dataset.clasif;
+      caja.querySelectorAll("[data-clasif]").forEach(x => x.setAttribute("aria-pressed", String(x === cl)));
+      const cf = caja.querySelector("#caja-catfija");
+      if (cf) cf.hidden = IMP.clasif !== "fija";
+      return;
+    }
     const b = e.target.closest("[data-ambfijo]");
     if (!b) return;
     IMP.ambitoFijo = b.dataset.ambfijo;
@@ -3658,11 +3989,21 @@ function construirImportacion() {
       const v = String(fila[IMP.mapa.ambito] || "").trim().toLowerCase();
       if (v) ambito = /negoc|empres|business/.test(v) ? "negocio" : "personal";
     }
+    let categoria, clasificado = false;
+    if (catTexto) {
+      categoria = IMP.mapaCats[catTexto] || porOmision;
+      clasificado = true;
+    } else if (IMP.clasif === "fija" && IMP.catFija) {
+      categoria = IMP.catFija;
+      clasificado = true;
+    } else {
+      const s = sugerirCategoria(concepto, IMP.destino === "ingreso" ? "ingreso" : "gasto", ambito);
+      categoria = s.id;
+      clasificado = s.seguro;
+    }
     crudos.push({
       fechaOriginal: IMP.mapa.fecha >= 0 ? interpretarFecha(fila[IMP.mapa.fecha]) : null,
-      monto, concepto,
-      categoria: catTexto ? (IMP.mapaCats[catTexto] || porOmision) : (IMP.catFija || porOmision),
-      ambito
+      monto, concepto, categoria, clasificado, ambito
     });
   });
 
@@ -3681,7 +4022,7 @@ function construirImportacion() {
   crudos.forEach(c => {
     const mov = {
       id: id(), tipo: IMP.destino === "ingreso" ? "ingreso" : "gasto",
-      monto: c.monto, categoria: c.categoria, fecha: c.fecha,
+      monto: c.monto, categoria: c.categoria, clasificado: c.clasificado, fecha: c.fecha,
       metodo: "", nota: c.concepto, ambito: c.ambito, creado: Date.now()
     };
     const clave = claveMovimiento(mov);
@@ -3727,6 +4068,17 @@ function pasoResumen(caja) {
           "</div></div>" +
           '<span class="reg__monto num">' + fmt(x.monto) + "</span></li>").join("") +
       "</ul>";
+    const sinReconocer = r.registros.filter(x => !x.clasificado).length;
+    if (sinReconocer && IMP.destino !== "cobrar") {
+      html += '<div class="nota" style="margin-bottom:var(--s-3)">' + svg("info", 18) +
+        "<div><strong>" + (r.registros.length - sinReconocer) + " de " + r.registros.length +
+        " se clasificaron por su concepto.</strong> " +
+        (sinReconocer === 1
+          ? "El restante entra como Otros porque no reconocí de qué se trataba; lo puedes"
+          : "Los " + sinReconocer + " restantes entran como Otros porque no reconocí de qué " +
+            "se trataban; los puedes") +
+        " reclasificar desde Ajustes.</div></div>";
+    }
     if (IMP.mapa.fecha < 0) {
       html += '<div class="nota">' + svg("info", 18) +
         "<div>Las fechas se repartieron a lo largo del mes porque el archivo no las traía. " +
@@ -3769,7 +4121,7 @@ function pasoResumen(caja) {
       datos.pestanaBalance = "cobrar";
     } else if (ids.length) {
       const ultima = IMP.listos.registros.map(m => m.fecha).sort().pop();
-      desfase = periodoDe(ultima);
+      desfase = desfaseDe(ultima);
       vistaActual = "movimientos";
     }
     avisar("Se importaron " + ids.length + " registros");
@@ -3827,12 +4179,19 @@ document.addEventListener("click", async e => {
     return;
   }
 
+  const vp = t.closest("[data-vista]");
+  if (vp) {
+    datos.perfil.vistaPeriodo = vp.dataset.vista;
+    desfase = topeDesfase();   // al cambiar de ventana, volver a la actual
+    await persistir(); pintar(); return;
+  }
+
   const salto = t.closest("[data-saltar]");
   if (salto) { desfase = Number(salto.dataset.saltar); pintar(); window.scrollTo(0, 0); return; }
 
   const per = t.closest("[data-periodo]");
   if (per) {
-    const max = periodoActual(datos.perfil.ancla, datos.perfil.ciclo);
+    const max = topeDesfase();
     const siguiente = desfase + Number(per.dataset.periodo);
     if (siguiente <= max) { desfase = siguiente; pintar(); }
     return;
@@ -3902,6 +4261,8 @@ document.addEventListener("click", async e => {
 
   if (t.closest("#campana")) { hojaAlertas(); return; }
   if (t.closest("#btn-importar")) { hojaImportar(); return; }
+  if (t.closest("#btn-reclasificar")) { hojaReclasificar(); return; }
+  if (t.closest("#btn-deshacer-rc")) { await deshacerReclasificacion(); return; }
   if (t.closest("#btn-deshacer-imp")) {
     confirmar("Deshacer importación",
       "Se van a eliminar los " + datos.ultimaImportacion.ids.length +
@@ -3973,7 +4334,7 @@ document.addEventListener("submit", async e => {
       ingresoEstimado: Math.max(0, parseFloat(f.querySelector("#p-ingreso").value) || 0)
     };
     datos.estrategiaDeuda = "nieve";
-    desfase = periodoActual(ancla, ciclo);
+    desfase = topeDesfase();
     await persistir();
     vistaActual = "resumen";
     pintar();
@@ -3988,7 +4349,7 @@ document.addEventListener("submit", async e => {
     datos.perfil.ciclo = f.querySelector('.seg-ciclo[aria-pressed="true"]').dataset.ciclo;
     datos.perfil.ancla = f.querySelector("#a-ancla").value || datos.perfil.ancla;
     datos.perfil.ingresoEstimado = Math.max(0, parseFloat(f.querySelector("#a-ingreso").value) || 0);
-    desfase = periodoActual(datos.perfil.ancla, datos.perfil.ciclo);
+    desfase = topeDesfase();
     await persistir();
     avisar("Cambios guardados");
     pintar();
@@ -4014,7 +4375,7 @@ window.addEventListener("unhandledrejection", () => avisar("Algo falló. Si se r
   const guardado = await Almacen.leer();
   if (guardado && typeof guardado === "object") {
     datos = Object.assign(estadoInicial(), guardado);
-    if (datos.perfil) desfase = periodoActual(datos.perfil.ancla, datos.perfil.ciclo);
+    if (datos.perfil) desfase = topeDesfase();
   }
   if (Almacen.modo === "memoria") almacenDuradero = false;
 
