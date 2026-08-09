@@ -1,0 +1,46 @@
+# Caddy — servidor estático para Mis finanzas (Revive tu Espacio A.C.)
+#
+# Railway termina el TLS en su capa, así que el HTTPS automático de Caddy
+# se desactiva a propósito: si se dejara activo, Caddy intentaría emitir
+# su propio certificado y la primera petición fallaría.
+
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+# Railway inyecta el puerto en la variable PORT. El valor por omisión
+# sirve para correrlo en local con `docker run -p 8080:8080`.
+:{$PORT:8080} {
+	root * /srv
+	encode zstd gzip
+
+	header {
+		# La app no habla con ningún servidor: todo el cálculo es local.
+		# connect-src 'none' hace que una fuga de datos sea imposible
+		# aunque alguien inyectara código.
+		Content-Security-Policy "default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; manifest-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "geolocation=(), microphone=(), camera=(), interest-cohort=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
+	}
+
+	# El HTML se revalida siempre para que una corrección llegue de
+	# inmediato; los íconos, que no cambian, se cachean un año.
+	@html path *.html /
+	header @html Cache-Control "no-cache"
+
+	@estaticos path *.png *.webmanifest *.svg *.ico
+	header @estaticos Cache-Control "public, max-age=31536000, immutable"
+
+	file_server {
+		index index.html
+	}
+
+	# Cualquier ruta desconocida devuelve la app, no un 404.
+	try_files {path} /index.html
+}
