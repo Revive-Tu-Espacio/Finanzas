@@ -14,7 +14,7 @@
 <link rel="icon" href="/icono-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://kbjtzvgafhmiuacyugag.supabase.co; form-action 'none'; base-uri 'none'; frame-ancestors 'self'">
 <title>Mis finanzas · Revive tu Espacio A.C.</title>
 <style>
 /* ============================================================
@@ -693,6 +693,183 @@ const Almacen = (() => {
   }
 
   return { leer, guardar, borrar, get modo() { return modo; } };
+})();
+
+/* ----------------------------------------------------------------
+   1b. NUBE  (opcional)
+
+   Adaptador de Supabase: autenticación por código de un solo uso y
+   respaldo remoto. Es OPCIONAL por diseño. La app funciona completa
+   sin tocar nada de esto; quien nunca lo encienda no ve un correo ni
+   un código en su vida, y sus datos no salen del navegador.
+
+   No usa la librería de Supabase: son llamadas REST directas, para no
+   cargar un archivo externo ni romper el funcionamiento sin conexión.
+
+   CONTRATO DE ERRORES — toda función pública devuelve una de dos
+   formas, nunca lanza:
+     { ok: true,  datos }
+     { ok: false, codigo, mensaje }
+   Códigos: RED (sin conexión), LIMITE (demasiados intentos),
+   CREDENCIAL (código incorrecto o vencido), SESION (hay que entrar
+   de nuevo), SERVIDOR (todo lo demás).
+   ---------------------------------------------------------------- */
+const Nube = (() => {
+  const BASE = "https://kbjtzvgafhmiuacyugag.supabase.co";
+  // Llave pública. Va incrustada a propósito: lo que protege los datos
+  // no es esconderla, es la RLS de la base. La service_role NUNCA
+  // aparece aquí.
+  const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtianR6dmdhZmhtaXVhY3l1Z2FnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMTU1MzAsImV4cCI6MjEwMTg5MTUzMH0.RxAsaaTcHXWskYY8pwVpOHraO2lcHpeciX3n-Gh5z0A";
+  const CLAVE_SESION = "rte_finanzas_sesion_v1";
+
+  let sesion = null;
+  try {
+    const crudo = localStorage.getItem(CLAVE_SESION);
+    if (crudo) sesion = JSON.parse(crudo);
+  } catch (_) { sesion = null; }
+
+  function fijarSesion(s) {
+    sesion = s;
+    try {
+      if (s) localStorage.setItem(CLAVE_SESION, JSON.stringify(s));
+      else localStorage.removeItem(CLAVE_SESION);
+    } catch (_) { /* sesión solo en memoria: se pierde al recargar */ }
+  }
+
+  const bien = d => ({ ok: true, datos: d });
+  const mal  = (codigo, mensaje) => ({ ok: false, codigo, mensaje });
+
+  /** Traduce una respuesta HTTP fallida al contrato de errores. */
+  async function traducir(r) {
+    if (r.status === 429) return mal("LIMITE", "Demasiados intentos. Espera unos minutos.");
+    if (r.status === 401 || r.status === 403) return mal("SESION", "Tu sesión venció. Entra de nuevo.");
+    let detalle = "";
+    try {
+      const cuerpo = await r.json();
+      detalle = cuerpo.msg || cuerpo.error_description || cuerpo.message || "";
+    } catch (_) { /* respuesta sin JSON */ }
+    if (r.status === 400 && /token|otp|expired|invalid/i.test(detalle))
+      return mal("CREDENCIAL", "Ese código no es válido o ya venció.");
+    return mal("SERVIDOR", detalle || "No se pudo completar la operación.");
+  }
+
+  async function llamar(ruta, opciones) {
+    try {
+      return await fetch(BASE + ruta, opciones);
+    } catch (_) {
+      return null; // sin conexión
+    }
+  }
+
+  /**
+   * Pide un código de seis dígitos al correo indicado.
+   * @param {string} correo
+   * @returns {Promise<{ok:boolean, codigo?:string, mensaje?:string}>}
+   */
+  async function pedirCodigo(correo) {
+    const r = await llamar("/auth/v1/otp", {
+      method: "POST",
+      headers: { apikey: ANON, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: correo, create_user: true })
+    });
+    if (!r) return mal("RED", "Sin conexión. Revisa tu internet.");
+    if (!r.ok) return traducir(r);
+    return bien(null);
+  }
+
+  /**
+   * Canjea el código por una sesión.
+   * @param {string} correo
+   * @param {string} codigo seis dígitos
+   */
+  async function verificarCodigo(correo, codigo) {
+    const r = await llamar("/auth/v1/verify", {
+      method: "POST",
+      headers: { apikey: ANON, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: correo, token: codigo, type: "email" })
+    });
+    if (!r) return mal("RED", "Sin conexión. Revisa tu internet.");
+    if (!r.ok) return traducir(r);
+    const s = await r.json();
+    if (!s.access_token) return mal("SERVIDOR", "Respuesta inesperada del servidor.");
+    fijarSesion({
+      acceso: s.access_token,
+      refresco: s.refresh_token,
+      correo: (s.user && s.user.email) || correo
+    });
+    return bien({ correo: sesion.correo });
+  }
+
+  /** Renueva el token de acceso. Uso interno. */
+  async function refrescar() {
+    if (!sesion || !sesion.refresco) return false;
+    const r = await llamar("/auth/v1/token?grant_type=refresh_token", {
+      method: "POST",
+      headers: { apikey: ANON, "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: sesion.refresco })
+    });
+    if (!r || !r.ok) return false;
+    const s = await r.json();
+    if (!s.access_token) return false;
+    fijarSesion({ acceso: s.access_token, refresco: s.refresh_token, correo: sesion.correo });
+    return true;
+  }
+
+  /**
+   * Llama una función de la base. Si el token venció, lo renueva una
+   * vez y reintenta; si tampoco, pide entrar de nuevo.
+   */
+  async function rpc(nombre, cuerpo, reintento) {
+    if (!sesion) return mal("SESION", "No has activado la nube.");
+    const r = await llamar("/rest/v1/rpc/" + nombre, {
+      method: "POST",
+      headers: {
+        apikey: ANON,
+        Authorization: "Bearer " + sesion.acceso,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(cuerpo || {})
+    });
+    if (!r) return mal("RED", "Sin conexión. Revisa tu internet.");
+    if (r.status === 401 && !reintento) {
+      if (await refrescar()) return rpc(nombre, cuerpo, true);
+      fijarSesion(null);
+      return mal("SESION", "Tu sesión venció. Entra de nuevo.");
+    }
+    if (!r.ok) return traducir(r);
+    return bien(await r.json());
+  }
+
+  /**
+   * Sube el estado completo. Es idempotente: cada registro conserva su
+   * identificador, así que repetirlo actualiza en vez de duplicar.
+   */
+  async function subir(estado) {
+    return rpc("importar_respaldo_json", { p_datos: estado });
+  }
+
+  /** Trae el estado guardado en la nube. */
+  async function bajar() {
+    return rpc("exportar_respaldo_json", {});
+  }
+
+  /** Cierra la sesión en este dispositivo. Los datos locales no se tocan. */
+  async function salir() {
+    if (sesion) {
+      await llamar("/auth/v1/logout", {
+        method: "POST",
+        headers: { apikey: ANON, Authorization: "Bearer " + sesion.acceso }
+      });
+    }
+    fijarSesion(null);
+    return bien(null);
+  }
+
+  return {
+    pedirCodigo, verificarCodigo, subir, bajar, salir,
+    get activa() { return !!sesion; },
+    get correo() { return sesion ? sesion.correo : ""; }
+  };
 })();
 
 /* ----------------------------------------------------------------
@@ -2247,6 +2424,24 @@ function vistaAjustes() {
           'style="margin-top:var(--s-3)">Revertir la última reclasificación (' +
           datos.ultimaReclasificacion.length + ")</button>"
         : "") +
+    "</div>" +
+
+    '<div class="tarjeta">' +
+      '<h2 class="tarjeta__titulo">Guardar en la nube</h2>' +
+      (Nube.activa
+        ? '<p style="font-size:14px;color:var(--tinta-suave);margin:0 0 var(--s-4)">' +
+          'Activada para ' + esc(Nube.correo) + '. Tus datos siguen viviendo en este ' +
+          'dispositivo; la nube es una copia.</p>' +
+          '<button class="btn btn--bloque" type="button" data-nube="subir">Guardar mis datos ahora</button>' +
+          '<button class="btn btn--bloque" type="button" data-nube="bajar" ' +
+          'style="margin-top:var(--s-3);background:transparent;color:var(--verde-bosque)">Traer lo que hay en la nube</button>' +
+          '<button class="btn btn--peligro btn--bloque" type="button" data-nube="salir" ' +
+          'style="margin-top:var(--s-3)">Cerrar sesión en este dispositivo</button>'
+        : '<p style="font-size:14px;color:var(--tinta-suave);margin:0 0 var(--s-4)">' +
+          'Si pierdes el teléfono, pierdes lo capturado. Con la nube encendida ' +
+          'queda una copia y puedes entrar desde otro dispositivo. Es opcional: ' +
+          'sin ella la app funciona igual.</p>' +
+          '<button class="btn btn--bloque" type="button" data-nube="entrar">Activar la nube</button>') +
     "</div>" +
 
     '<div class="tarjeta">' +
@@ -4503,6 +4698,124 @@ async function deshacerImportacion() {
    9. EVENTOS (delegación única)
    ---------------------------------------------------------------- */
 
+
+/* ---------- Nube: acceso por código ---------- */
+
+/**
+ * Hoja de acceso en dos pasos: correo y luego código de seis dígitos.
+ * Sin contraseñas. Se cierra sola al entrar y repinta Ajustes.
+ */
+function hojaNube() {
+  const cuerpo =
+    '<form id="form-nube" novalidate>' +
+      '<p style="font-size:14px;color:var(--tinta-suave);margin:0 0 var(--s-4)">' +
+        "Te mandamos un código de seis dígitos por correo. No hay contraseñas " +
+        "que recordar ni que perder.</p>" +
+      '<div class="campo" id="paso-correo">' +
+        '<label for="nb-correo">Tu correo</label>' +
+        '<input class="entrada" id="nb-correo" type="email" inputmode="email" ' +
+        'autocomplete="email" required placeholder="nombre@correo.com"></div>' +
+      '<div class="campo" id="paso-codigo" hidden>' +
+        '<label for="nb-codigo">Código que te llegó</label>' +
+        '<input class="entrada" id="nb-codigo" type="text" inputmode="numeric" ' +
+        'autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" ' +
+        'placeholder="000000"></div>' +
+      '<p class="campo__error" id="err-nube" hidden role="alert" aria-live="assertive"></p>' +
+      '<button class="btn btn--bloque" type="submit" id="nb-enviar">Enviarme el código</button>' +
+      '<button class="btn btn--bloque" type="button" id="nb-otra" hidden ' +
+      'style="margin-top:var(--s-3);background:transparent;color:var(--verde-bosque)">' +
+      "Usar otro correo</button>" +
+    "</form>";
+
+  abrirHoja("Guardar en la nube", cuerpo, caja => {
+    const fCorreo = caja.querySelector("#paso-correo");
+    const fCodigo = caja.querySelector("#paso-codigo");
+    const iCorreo = caja.querySelector("#nb-correo");
+    const iCodigo = caja.querySelector("#nb-codigo");
+    const btn = caja.querySelector("#nb-enviar");
+    const otra = caja.querySelector("#nb-otra");
+    const err = caja.querySelector("#err-nube");
+    let paso = "correo", ocupado = false;
+
+    function mostrarError(texto) {
+      err.hidden = !texto;
+      if (texto) err.innerHTML = svg("alerta", 15) + "<span>" + esc(texto) + "</span>";
+    }
+    function ocupar(si, etiqueta) {
+      ocupado = si;
+      btn.disabled = si;
+      btn.setAttribute("aria-busy", String(si));
+      btn.textContent = etiqueta;
+    }
+
+    otra.addEventListener("click", () => {
+      paso = "correo";
+      fCorreo.hidden = false; fCodigo.hidden = true; otra.hidden = true;
+      iCodigo.value = ""; mostrarError("");
+      btn.textContent = "Enviarme el código";
+      iCorreo.focus();
+    });
+
+    caja.querySelector("#form-nube").addEventListener("submit", async e => {
+      e.preventDefault();
+      if (ocupado) return;
+      mostrarError("");
+
+      if (paso === "correo") {
+        const correo = iCorreo.value.trim();
+        if (!correo || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+          mostrarError("Escribe un correo válido."); iCorreo.focus(); return;
+        }
+        ocupar(true, "Enviando…");
+        const r = await Nube.pedirCodigo(correo);
+        ocupar(false, "Entrar");
+        if (!r.ok) { mostrarError(r.mensaje); btn.textContent = "Enviarme el código"; return; }
+        paso = "codigo";
+        fCorreo.hidden = true; fCodigo.hidden = false; otra.hidden = false;
+        iCodigo.focus();
+        return;
+      }
+
+      const codigo = iCodigo.value.replace(/\D/g, "");
+      if (codigo.length !== 6) { mostrarError("El código son seis dígitos."); iCodigo.focus(); return; }
+      ocupar(true, "Comprobando…");
+      const r = await Nube.verificarCodigo(iCorreo.value.trim(), codigo);
+      ocupar(false, "Entrar");
+      if (!r.ok) { mostrarError(r.mensaje); iCodigo.select(); return; }
+      cerrarHoja();
+      avisar("Nube activada. Ya puedes guardar tu respaldo.");
+      pintar();
+    });
+  });
+}
+
+/** Sube el estado completo a la nube, con confirmación del resultado. */
+async function subirALaNube() {
+  avisar("Guardando en la nube…");
+  const r = await Nube.subir(datos);
+  if (!r.ok) { avisar(r.mensaje); if (r.codigo === "SESION") pintar(); return; }
+  const c = r.datos || {};
+  avisar("Guardado: " + (c.movimientos || 0) + " movimientos y " +
+         (c.por_cobrar || 0) + " por cobrar.");
+}
+
+/** Trae el estado de la nube. Pide confirmación: reemplaza lo local. */
+function bajarDeLaNube() {
+  confirmar("Traer mis datos",
+    "Lo que está en la nube va a reemplazar lo que tienes en este dispositivo. " +
+    "Si aquí capturaste algo que no has subido, se pierde.",
+    "Sí, traer",
+    async () => {
+      const r = await Nube.bajar();
+      if (!r.ok) { avisar(r.mensaje); return; }
+      if (!r.datos || !r.datos.movimientos) { avisar("La nube está vacía."); return; }
+      datos = r.datos;
+      await persistir();
+      avisar("Datos traídos de la nube.");
+      pintar();
+    });
+}
+
 document.addEventListener("click", async e => {
   const t = e.target;
 
@@ -4632,6 +4945,22 @@ document.addEventListener("click", async e => {
     fc.setAttribute("aria-pressed", String(FILTRO.cats.includes(id)));
     FILTRO.limite = 40;
     pintarListaMovs(); return;
+  }
+
+  const nb = t.closest("[data-nube]");
+  if (nb) {
+    const acc = nb.dataset.nube;
+    if (acc === "entrar") { hojaNube(); return; }
+    if (acc === "subir")  { await subirALaNube(); return; }
+    if (acc === "bajar")  { bajarDeLaNube(); return; }
+    if (acc === "salir") {
+      confirmar("Cerrar sesión",
+        "Se cierra la sesión en este dispositivo. Tus datos locales no se tocan " +
+        "y la copia en la nube se conserva.",
+        "Sí, cerrar",
+        async () => { await Nube.salir(); avisar("Sesión cerrada."); pintar(); });
+      return;
+    }
   }
 
   if (t.closest("#campana")) { hojaAlertas(); return; }
