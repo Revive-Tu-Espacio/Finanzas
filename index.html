@@ -375,6 +375,37 @@ textarea.entrada{padding:var(--s-3);min-height:72px;resize:vertical}
 }
 .filtro-pill:hover{background:var(--linea)}
 .campo-par{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--s-3)}
+
+/* Fila de categoría convertida en botón: hereda el aspecto de la barra
+   y solo agrega el afford de que se puede tocar. */
+.barra-fila--btn{
+  display:block;width:100%;text-align:left;background:transparent;border:none;
+  font:inherit;color:inherit;padding:var(--s-2) var(--s-2) var(--s-3);
+  margin:0 calc(var(--s-2) * -1);border-radius:var(--r-md);
+}
+.barra-fila--btn:hover{background:var(--papel)}
+
+.gflujo{width:100%;height:auto;display:block;margin-top:var(--s-2)}
+.gflujo__pie{
+  display:flex;flex-wrap:wrap;gap:var(--s-4);margin-top:var(--s-3);
+  font-size:12px;color:var(--tinta-suave);
+}
+.gflujo__pie span{display:inline-flex;align-items:center;gap:var(--s-2)}
+.punto{width:9px;height:9px;border-radius:var(--r-full);display:inline-block}
+.punto--ing{background:var(--verde-bosque)}
+.punto--gas{background:var(--alerta)}
+
+.det-cab{
+  display:flex;align-items:baseline;justify-content:space-between;gap:var(--s-3);
+  padding-bottom:var(--s-3);margin-bottom:var(--s-2);border-bottom:1px solid var(--linea);
+}
+.det-cab__rotulo{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-suave)}
+.det-cab__monto{font-size:19px;font-family:var(--serif)}
+
+.delta{font-size:12px;font-variant-numeric:tabular-nums;color:var(--tinta-suave);display:block;margin-top:3px}
+.delta--mas{color:var(--verde-bosque)}
+.delta--menos{color:var(--alerta)}
+.barra__relleno.ingreso{background:var(--verde-hoja)}
 .dia-cab__fecha{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-suave)}
 .dia-cab__neto{font-size:12px;color:var(--tinta-suave);font-variant-numeric:tabular-nums}
 
@@ -1309,16 +1340,37 @@ function movimientosDe(desplazamiento) {
  */
 function totales(desplazamiento) {
   const movs = movimientosDe(desplazamiento);
-  let ingresos = 0, gastos = 0;
-  const porCategoria = {};
+  let ingresos = 0, gastos = 0, nIngresos = 0, nGastos = 0;
+  const porCategoria = {}, porCategoriaIngreso = {}, porDia = {};
   for (const m of movs) {
-    if (m.tipo === "ingreso") ingresos += m.monto;
-    else {
-      gastos += m.monto;
+    const d = porDia[m.fecha] || (porDia[m.fecha] = { ingreso: 0, gasto: 0 });
+    if (m.tipo === "ingreso") {
+      ingresos += m.monto; nIngresos++;
+      d.ingreso += m.monto;
+      porCategoriaIngreso[m.categoria] = (porCategoriaIngreso[m.categoria] || 0) + m.monto;
+    } else {
+      gastos += m.monto; nGastos++;
+      d.gasto += m.monto;
       porCategoria[m.categoria] = (porCategoria[m.categoria] || 0) + m.monto;
     }
   }
-  return { ingresos, gastos, saldo: ingresos - gastos, porCategoria };
+  return {
+    ingresos, gastos, saldo: ingresos - gastos,
+    nIngresos, nGastos, porCategoria, porCategoriaIngreso, porDia
+  };
+}
+
+/**
+ * Variación contra el periodo inmediato anterior.
+ * @param {number} actual
+ * @param {number} previo
+ * @returns {{pct:number|null, signo:string}} pct null cuando no hay base
+ *   de comparación: pasar de 0 a cualquier cosa no es un porcentaje.
+ */
+function variacion(actual, previo) {
+  if (!previo) return { pct: null, signo: actual > 0 ? "mas" : "igual" };
+  const pct = Math.round((actual - previo) / previo * 100);
+  return { pct, signo: pct > 0 ? "mas" : pct < 0 ? "menos" : "igual" };
 }
 
 function nombreCategoria(cid) {
@@ -1783,6 +1835,145 @@ function avisoOtrosPeriodos() {
 
 /* ---------- Resumen ---------- */
 
+
+/**
+ * Fila de categoría con barra proporcional. Es un botón: tocarla abre
+ * el detalle de esa categoría. Una cifra agregada sin forma de ver qué
+ * la compone obliga a irse a Movimientos y reconstruir el filtro a mano.
+ * @param {string} cid categoría
+ * @param {number} monto
+ * @param {number} total base del porcentaje
+ * @param {"gasto"|"ingreso"} tipo
+ * @returns {string} HTML
+ */
+function filaCategoria(cid, monto, total, tipo) {
+  const pct = Math.round(monto / (total || 1) * 100);
+  return '<button class="barra-fila barra-fila--btn" type="button" ' +
+    'data-catdet="' + esc(cid) + '" data-cattipo="' + tipo + '" ' +
+    'aria-label="' + esc(nombreCategoria(cid)) + ": " + fmt(monto, true) + ", " + pct + '%. Ver detalle">' +
+    '<div class="barra-cab"><span class="barra-cab__nombre">' + esc(nombreCategoria(cid)) + "</span>" +
+    '<span class="barra-cab__cifra num">' + fmt(monto, true) + " · " + pct + "%</span></div>" +
+    '<div class="barra"><div class="barra__relleno' + (tipo === "ingreso" ? " ingreso" : "") +
+    '" style="width:' + pct + '%"></div></div></button>';
+}
+
+/**
+ * Detalle de una categoría en el periodo abierto: sus movimientos, de
+ * mayor a menor, con el total arriba.
+ * @param {string} cid
+ * @param {"gasto"|"ingreso"} tipo
+ */
+function panelCategoria(cid, tipo) {
+  const movs = movimientosDe(desfase)
+    .filter(m => m.tipo === tipo && m.categoria === cid)
+    .sort((a, b) => b.monto - a.monto);
+  const total = movs.reduce((s, m) => s + m.monto, 0);
+  abrirPanel(nombreCategoria(cid),
+    '<div class="det-cab">' +
+      '<span class="det-cab__rotulo">' + (tipo === "ingreso" ? "Entró" : "Salió") +
+        " · " + movs.length + (movs.length === 1 ? " movimiento" : " movimientos") + "</span>" +
+      '<span class="det-cab__monto num">' + fmt(total) + "</span>" +
+    "</div>" +
+    (movs.length
+      ? movs.map(filaMovimiento).join("")
+      : '<p class="col-vacia">Sin movimientos en este periodo.</p>'));
+}
+
+/**
+ * Gráfica de barras del flujo diario: lo que entró hacia arriba y lo
+ * que salió hacia abajo, sobre una línea de cero.
+ *
+ * Se dibuja como SVG en línea, sin librería, por la misma razón que el
+ * resto de la app: no cargar nada externo ni depender de la red.
+ * Cuando el periodo pasa de 62 días no se dibuja, porque las barras
+ * quedarían de menos de un píxel y dejarían de decir nada.
+ *
+ * @param {object} t resultado de totales()
+ * @returns {string} HTML, vacío si no aplica
+ */
+function graficaFlujo(t) {
+  const { inicio, fin } = limitesVista(desfase);
+  const dias = [];
+  const d = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate());
+  while (d <= fin && dias.length <= 62) {
+    dias.push(d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0"));
+    d.setDate(d.getDate() + 1);
+  }
+  if (dias.length < 2 || dias.length > 62) return "";
+
+  const tope = dias.reduce((mx, k) => {
+    const v = t.porDia[k] || { ingreso: 0, gasto: 0 };
+    return Math.max(mx, v.ingreso, v.gasto);
+  }, 0);
+  if (!tope) return "";
+
+  const W = 700, H = 150, base = 78, alto = 62;
+  const paso = W / dias.length;
+  const ancho = Math.max(2, Math.min(14, paso - 2));
+
+  const barras = dias.map((k, i) => {
+    const v = t.porDia[k] || { ingreso: 0, gasto: 0 };
+    const x = i * paso + (paso - ancho) / 2;
+    let out = "";
+    if (v.ingreso > 0) {
+      const h = Math.max(1, v.ingreso / tope * alto);
+      out += '<rect x="' + x.toFixed(1) + '" y="' + (base - h).toFixed(1) + '" width="' + ancho +
+        '" height="' + h.toFixed(1) + '" rx="1.5" fill="var(--verde-bosque)"><title>' +
+        esc(FMT_LARGO.format(aFecha(k))) + ": entró " + fmt(v.ingreso, true) + "</title></rect>";
+    }
+    if (v.gasto > 0) {
+      const h = Math.max(1, v.gasto / tope * alto);
+      out += '<rect x="' + x.toFixed(1) + '" y="' + (base + 2).toFixed(1) + '" width="' + ancho +
+        '" height="' + h.toFixed(1) + '" rx="1.5" fill="var(--alerta)"><title>' +
+        esc(FMT_LARGO.format(aFecha(k))) + ": salió " + fmt(v.gasto, true) + "</title></rect>";
+    }
+    return out;
+  }).join("");
+
+  const conMov = dias.filter(k => t.porDia[k]).length;
+  return '<div class="tarjeta"><h2 class="tarjeta__titulo">Cómo se movió el periodo</h2>' +
+    '<svg class="gflujo" viewBox="0 0 ' + W + " " + H + '" role="img" ' +
+      'aria-label="Flujo diario: hubo movimientos en ' + conMov + " de " + dias.length +
+      " días. Entró " + fmt(t.ingresos, true) + " y salió " + fmt(t.gastos, true) + '">' +
+      '<line x1="0" y1="' + base + '" x2="' + W + '" y2="' + base +
+        '" stroke="var(--linea)" stroke-width="1"/>' +
+      barras +
+    "</svg>" +
+    '<div class="gflujo__pie">' +
+      '<span><i class="punto punto--ing"></i>Entró</span>' +
+      '<span><i class="punto punto--gas"></i>Salió</span>' +
+      "<span>" + conMov + " de " + dias.length + " días con movimiento</span>" +
+    "</div></div>";
+}
+
+/**
+ * Tarjeta de cuentas por cobrar abiertas. Vive en el resumen porque
+ * para quien factura, lo pendiente de cobro pesa más que el saldo del
+ * mes, y estaba enterrado en otra pestaña.
+ * @returns {string} HTML, vacío si no hay nada abierto
+ */
+function tarjetaPorCobrar() {
+  const abiertas = (datos.porCobrar || []).filter(c => !c.cobrado);
+  if (!abiertas.length) return "";
+  const total = abiertas.reduce((s, c) => s + c.monto, 0);
+  const top = abiertas.slice().sort((a, b) => b.monto - a.monto).slice(0, 3);
+  return '<div class="tarjeta"><h2 class="tarjeta__titulo">Te deben</h2>' +
+    '<div class="det-cab"><span class="det-cab__rotulo">' + abiertas.length +
+      (abiertas.length === 1 ? " cuenta abierta" : " cuentas abiertas") + "</span>" +
+      '<span class="det-cab__monto num">' + fmt(total) + "</span></div>" +
+    top.map(c =>
+      '<div class="reg"><span class="reg__cuerpo">' +
+        '<span class="reg__nombre">' + esc(c.concepto) + "</span></span>" +
+        '<span class="reg__monto num">' + fmt(c.monto) + "</span></div>").join("") +
+    (abiertas.length > top.length
+      ? '<p class="col-vacia">y ' + (abiertas.length - top.length) + " más</p>"
+      : "") +
+    '<button class="btn btn--fantasma btn--bloque" type="button" id="ver-cobrar" ' +
+      'style="margin-top:var(--s-4)">Ver todas</button></div>';
+}
+
 function vistaResumen() {
   const p = datos.perfil;
   const t = totales(desfase);
@@ -1795,7 +1986,18 @@ function vistaResumen() {
   const rebasadas = conPresupuesto.filter(k => (t.porCategoria[k] || 0) > datos.presupuesto[k]);
 
   const topGastos = Object.entries(t.porCategoria).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topIngresos = Object.entries(t.porCategoriaIngreso).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const totalGasto = t.gastos || 1;
+
+  // Comparativo con el periodo anterior. Una cifra suelta no dice si el
+  // mes va bien; contra el anterior, sí.
+  const prev = totales(desfase - 1);
+  const dIng = variacion(t.ingresos, prev.ingresos);
+  const dGas = variacion(t.gastos, prev.gastos);
+  const rotuloDelta = d =>
+    d.pct === null ? "" :
+    '<span class="delta delta--' + d.signo + '">' +
+      (d.pct > 0 ? "+" : "") + d.pct + "% vs. antes</span>";
 
   let html =
     '<h1 class="sr-only">Resumen del periodo</h1>' +
@@ -1820,8 +2022,10 @@ function vistaResumen() {
         ) + "</p>" +
       "</div>" +
       '<dl class="flujo">' +
-        '<div><dt>Entró</dt><dd class="num">' + fmt(t.ingresos, true) + "</dd></div>" +
-        '<div><dt>Salió</dt><dd class="num">' + fmt(t.gastos, true) + "</dd></div>" +
+        '<div><dt>Entró</dt><dd class="num">' + fmt(t.ingresos, true) +
+          rotuloDelta(dIng) + "</dd></div>" +
+        '<div><dt>Salió</dt><dd class="num">' + fmt(t.gastos, true) +
+          rotuloDelta(dGas) + "</dd></div>" +
       "</dl>" +
     "</div>";
 
@@ -1839,15 +2043,27 @@ function vistaResumen() {
       '<p class="vacio__texto">Registra el primero y aquí verás en qué se te está yendo el dinero.</p>' +
       '<button class="btn" type="button" data-abrir="movimiento">Registrar un gasto</button></div>';
   } else {
-    html += topGastos.map(([cid, monto]) => {
-      const pct = Math.round(monto / totalGasto * 100);
-      return '<div class="barra-fila">' +
-        '<div class="barra-cab"><span class="barra-cab__nombre">' + esc(nombreCategoria(cid)) + "</span>" +
-        '<span class="barra-cab__cifra num">' + fmt(monto, true) + " · " + pct + "%</span></div>" +
-        '<div class="barra"><div class="barra__relleno" style="width:' + pct + '%"></div></div></div>';
-    }).join("");
+    html += topGastos.map(([cid, monto]) =>
+      filaCategoria(cid, monto, totalGasto, "gasto")).join("");
+    const sinClasificar = t.porCategoria.otros || 0;
+    if (sinClasificar / totalGasto > 0.4) {
+      html += '<div class="nota" style="margin-top:var(--s-4)">' + svg("info", 18) +
+        "<div><strong>La mayor parte cayó en Otros.</strong> Mientras siga así, " +
+        "esta gráfica no te dice en qué se te va el dinero. Se arregla desde " +
+        "Reclasificar, en Ajustes.</div></div>";
+    }
   }
   html += "</div>";
+
+  html += '<div class="tarjeta"><h2 class="tarjeta__titulo">De dónde vino</h2>' +
+    (topIngresos.length
+      ? topIngresos.map(([cid, monto]) =>
+          filaCategoria(cid, monto, t.ingresos || 1, "ingreso")).join("")
+      : '<p class="col-vacia">Sin ingresos registrados en este periodo.</p>') +
+    "</div>";
+
+  html += graficaFlujo(t);
+  html += tarjetaPorCobrar();
 
   const dias = diasSinRespaldo();
   if (datos.movimientos.length >= 8 && (dias === null || dias > 30)) {
@@ -5167,6 +5383,19 @@ document.addEventListener("click", async e => {
     reiniciarPagina();
     pintar(); return;
   }
+  if (t.closest("#ver-cobrar")) {
+    // Deudas tiene dos pestañas; hay que dejarla en "Me deben" o el
+    // botón aterriza en la lista equivocada.
+    datos.pestanaBalance = "cobrar";
+    await persistir();
+    vistaActual = "deudas";
+    pintar();
+    return;
+  }
+
+  const cd = t.closest("[data-catdet]");
+  if (cd) { panelCategoria(cd.dataset.catdet, cd.dataset.cattipo); return; }
+
   if (t.closest("#btn-filtros")) { hojaFiltros(); return; }
 
   const pg = t.closest("[data-pag]");
