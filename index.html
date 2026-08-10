@@ -740,9 +740,15 @@ const Nube = (() => {
   const mal  = (codigo, mensaje) => ({ ok: false, codigo, mensaje });
 
   /** Traduce una respuesta HTTP fallida al contrato de errores. */
-  async function traducir(r) {
+  async function traducir(r, contexto) {
     if (r.status === 429) return mal("LIMITE", "Demasiados intentos. Espera unos minutos.");
-    if (r.status === 401 || r.status === 403) return mal("SESION", "Tu sesión venció. Entra de nuevo.");
+    if (r.status === 401 || r.status === 403) {
+      // Al canjear el código, un 401 significa código incorrecto, no
+      // sesión vencida: todavía no existe ninguna sesión que vencer.
+      if (contexto === "acceso")
+        return mal("CREDENCIAL", "Ese código no es válido o ya venció. Revisa que lo copiaste completo.");
+      return mal("SESION", "Tu sesión venció. Entra de nuevo.");
+    }
     let detalle = "";
     try {
       const cuerpo = await r.json();
@@ -789,7 +795,7 @@ const Nube = (() => {
       body: JSON.stringify({ email: correo, token: codigo, type: "email" })
     });
     if (!r) return mal("RED", "Sin conexión. Revisa tu internet.");
-    if (!r.ok) return traducir(r);
+    if (!r.ok) return traducir(r, "acceso");
     const s = await r.json();
     if (!s.access_token) return mal("SERVIDOR", "Respuesta inesperada del servidor.");
     fijarSesion({
@@ -4709,7 +4715,7 @@ function hojaNube() {
   const cuerpo =
     '<form id="form-nube" novalidate>' +
       '<p style="font-size:14px;color:var(--tinta-suave);margin:0 0 var(--s-4)">' +
-        "Te mandamos un código de seis dígitos por correo. No hay contraseñas " +
+        "Te mandamos un código por correo. No hay contraseñas " +
         "que recordar ni que perder.</p>" +
       '<div class="campo" id="paso-correo">' +
         '<label for="nb-correo">Tu correo</label>' +
@@ -4718,8 +4724,8 @@ function hojaNube() {
       '<div class="campo" id="paso-codigo" hidden>' +
         '<label for="nb-codigo">Código que te llegó</label>' +
         '<input class="entrada" id="nb-codigo" type="text" inputmode="numeric" ' +
-        'autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" ' +
-        'placeholder="000000"></div>' +
+        'autocomplete="one-time-code" maxlength="10" pattern="[0-9]{6,10}" ' +
+        'placeholder="Los dígitos del correo"></div>' +
       '<p class="campo__error" id="err-nube" hidden role="alert" aria-live="assertive"></p>' +
       '<button class="btn btn--bloque" type="submit" id="nb-enviar">Enviarme el código</button>' +
       '<button class="btn btn--bloque" type="button" id="nb-otra" hidden ' +
@@ -4769,7 +4775,7 @@ function hojaNube() {
         ocupar(true, "Enviando…");
         const r = await Nube.pedirCodigo(correo);
         ocupar(false, "Entrar");
-        if (!r.ok) { mostrarError(r.mensaje); btn.textContent = "Enviarme el código"; return; }
+        if (!r.ok) { mostrarError(r.mensaje); btn.textContent = "Enviarme el código"; otra.hidden = true; return; }
         paso = "codigo";
         fCorreo.hidden = true; fCodigo.hidden = false; otra.hidden = false;
         iCodigo.focus();
@@ -4777,7 +4783,7 @@ function hojaNube() {
       }
 
       const codigo = iCodigo.value.replace(/\D/g, "");
-      if (codigo.length !== 6) { mostrarError("El código son seis dígitos."); iCodigo.focus(); return; }
+      if (codigo.length < 6) { mostrarError("Copia el código completo del correo."); iCodigo.focus(); return; }
       ocupar(true, "Comprobando…");
       const r = await Nube.verificarCodigo(iCorreo.value.trim(), codigo);
       ocupar(false, "Entrar");
