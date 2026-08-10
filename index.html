@@ -349,6 +349,32 @@ textarea.entrada{padding:var(--s-3);min-height:72px;resize:vertical}
 .col-cab__n.ingreso{color:var(--verde-bosque)}
 .col-cab__n.gasto{color:var(--alerta)}
 .col-vacia{padding:var(--s-5) 0;font-size:14px;color:var(--tinta-suave)}
+
+/* Paginador. Se prefiere a la carga progresiva porque con listas de
+   trabajo hay que poder volver a donde uno estaba, y el scroll infinito
+   no deja regresar. */
+.paginador{
+  display:flex;align-items:center;justify-content:space-between;gap:var(--s-3);
+  margin-top:var(--s-5);padding-top:var(--s-4);border-top:1px solid var(--linea);
+}
+.paginador__pos{font-size:13px;color:var(--tinta-suave);font-variant-numeric:tabular-nums}
+.paginador button{
+  min-height:44px;padding:0 var(--s-4);border-radius:var(--r-full);
+  border:1px solid var(--linea);background:var(--superficie);color:var(--tinta);
+  font:inherit;font-size:14px;display:inline-flex;align-items:center;gap:var(--s-2);
+}
+.paginador button:hover:not(:disabled){background:var(--papel)}
+.paginador button:disabled{opacity:.4;cursor:default}
+
+.filtros-activos{display:flex;flex-wrap:wrap;gap:var(--s-2);margin-bottom:var(--s-3)}
+.filtro-pill{
+  display:inline-flex;align-items:center;gap:var(--s-2);
+  padding:5px var(--s-3);border-radius:var(--r-full);
+  background:var(--verde-claro);color:var(--tinta);border:none;
+  font:inherit;font-size:13px;
+}
+.filtro-pill:hover{background:var(--linea)}
+.campo-par{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--s-3)}
 .dia-cab__fecha{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-suave)}
 .dia-cab__neto{font-size:12px;color:var(--tinta-suave);font-variant-numeric:tabular-nums}
 
@@ -1328,6 +1354,7 @@ async function persistir() {
    ---------------------------------------------------------------- */
 
 const ICONO = {
+  filtro:  '<path d="M3 5h18l-7 8v6l-4 2v-8L3 5Z"/>',
   resumen: '<path d="M3 13h4v8H3zM10 3h4v18h-4zM17 9h4v12h-4z"/>',
   lista:   '<path d="M4 6h16M4 12h16M4 18h10"/>',
   bolsa:   '<path d="M5 8h14l1 12H4L5 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
@@ -1911,9 +1938,26 @@ document.addEventListener("keydown", e => {
 // ordenamiento: agrupar por día y ordenar por monto son excluyentes,
 // y mezclarlos produce una lista sin encabezados con fechas salteadas.
 //   "dia"      · agrupado por día, del más reciente al más antiguo
-//   "monto"    · lista plana, de mayor a menor
-//   "columnas" · entradas y salidas separadas, cada una de mayor a menor
-const FILTRO = { texto: "", tipo: "todos", cats: [], limite: 40, orden: "dia" };
+//   "dia"   · agrupado por día, del más reciente al más antiguo
+//   "monto" · entradas y salidas en dos columnas, cada una de mayor a menor
+//
+// La lista se pagina en vez de crecer con "ver más": en una lista de
+// trabajo hay que poder regresar a donde uno estaba, y el scroll
+// continuo no deja volver.
+const POR_PAGINA = 25;
+const FILTRO = {
+  texto: "", tipo: "todos", cats: [], orden: "dia", pagina: 1,
+  montoMin: null, montoMax: null, fechaDesde: "", fechaHasta: ""
+};
+
+/** @returns {boolean} si hay algún filtro de monto o fecha puesto */
+function hayFiltroFino() {
+  return FILTRO.montoMin !== null || FILTRO.montoMax !== null ||
+         !!FILTRO.fechaDesde || !!FILTRO.fechaHasta;
+}
+
+/** Vuelve a la primera página. Se llama cada vez que cambia un filtro. */
+function reiniciarPagina() { FILTRO.pagina = 1; }
 
 /**
  * Aplica buscador y filtros sobre los movimientos de la ventana visible.
@@ -1931,6 +1975,10 @@ function movsFiltrados() {
       normalizar(x.metodo).includes(q) ||
       String(x.monto).includes(q));
   }
+  if (FILTRO.montoMin !== null) m = m.filter(x => x.monto >= FILTRO.montoMin);
+  if (FILTRO.montoMax !== null) m = m.filter(x => x.monto <= FILTRO.montoMax);
+  if (FILTRO.fechaDesde) m = m.filter(x => x.fecha >= FILTRO.fechaDesde);
+  if (FILTRO.fechaHasta) m = m.filter(x => x.fecha <= FILTRO.fechaHasta);
   m = m.slice();
   if (FILTRO.orden === "dia")
     m.sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.creado || 0) - (a.creado || 0));
@@ -1981,32 +2029,120 @@ function filaMovimiento(m) {
  * @param {Array} movs ya filtrados y ordenados por monto
  * @returns {string} HTML
  */
-function htmlDosColumnas(movs) {
+function htmlDosColumnas(pagina, todos) {
   const cols = [
-    { clase: "ingreso", titulo: "Entró", filas: movs.filter(m => m.tipo === "ingreso") },
-    { clase: "gasto",   titulo: "Salió", filas: movs.filter(m => m.tipo === "gasto") }
+    { clase: "ingreso", titulo: "Entró", tipo: "ingreso" },
+    { clase: "gasto",   titulo: "Salió", tipo: "gasto" }
   ];
   return '<div class="dos-col">' + cols.map(c => {
-    const total = c.filas.reduce((s, m) => s + m.monto, 0);
-    const vis = c.filas.slice(0, FILTRO.limite);
+    // El encabezado resume TODO lo filtrado, no solo esta página: el
+    // total del periodo es el dato útil, y cambiaría al pasar de hoja.
+    const deEste = todos.filter(m => m.tipo === c.tipo);
+    const enPagina = pagina.filter(m => m.tipo === c.tipo);
+    const total = deEste.reduce((s, m) => s + m.monto, 0);
     return '<div class="dos-col__col">' +
-      '<div class="col-cab"><span class="col-cab__t">' + c.titulo + " · " + c.filas.length + "</span>" +
+      '<div class="col-cab"><span class="col-cab__t">' + c.titulo + " · " + deEste.length + "</span>" +
         '<span class="col-cab__n ' + c.clase + '">' + fmt(total, true) + "</span></div>" +
-      (vis.length
-        ? vis.map(filaMovimiento).join("") +
-          (c.filas.length > vis.length
-            ? '<p class="col-vacia">y ' + (c.filas.length - vis.length) + " más</p>"
-            : "")
-        : '<p class="col-vacia">Nada en este periodo.</p>') +
+      (enPagina.length
+        ? enPagina.map(filaMovimiento).join("")
+        : '<p class="col-vacia">' +
+          (deEste.length ? "Nada en esta página." : "Nada en este periodo.") + "</p>") +
       "</div>";
   }).join("") + "</div>";
+}
+
+/**
+ * Controles para moverse entre páginas.
+ * @param {number} total resultados filtrados
+ * @param {number} paginas cuántas hay
+ * @returns {string} HTML, vacío si todo cabe en una
+ */
+function htmlPaginador(total, paginas) {
+  if (paginas <= 1) return "";
+  const desde = (FILTRO.pagina - 1) * POR_PAGINA + 1;
+  const hasta = Math.min(FILTRO.pagina * POR_PAGINA, total);
+  return '<div class="paginador">' +
+    '<button type="button" data-pag="ant"' + (FILTRO.pagina <= 1 ? " disabled" : "") +
+      ' aria-label="Página anterior">' + svg("atras", 16) + "Anterior</button>" +
+    '<span class="paginador__pos" aria-live="polite">' + desde + "–" + hasta +
+      " de " + total + "</span>" +
+    '<button type="button" data-pag="sig"' + (FILTRO.pagina >= paginas ? " disabled" : "") +
+      ' aria-label="Página siguiente">Siguiente' + svg("adelante", 16) + "</button>" +
+  "</div>";
+}
+
+/**
+ * Hoja de filtros por monto y fecha. Se pone aparte porque la pantalla
+ * de movimientos ya carga periodo, buscador, tipo, categorías y orden;
+ * cuatro campos más ahí adentro la volverían ilegible.
+ */
+function hojaFiltros() {
+  const v = x => (x === null || x === undefined ? "" : String(x));
+  abrirHoja("Filtrar",
+    '<form id="form-filtros" novalidate>' +
+      '<p style="font-size:14px;color:var(--tinta-suave);margin:0 0 var(--s-4)">' +
+        "Se aplica dentro del periodo que tienes abierto. Deja vacío lo que no quieras usar.</p>" +
+      '<div class="campo"><label>Monto</label>' +
+        '<div class="campo-par">' +
+          '<input class="entrada" id="f-min" type="number" inputmode="decimal" min="0" ' +
+            'placeholder="Desde" aria-label="Monto desde" value="' + esc(v(FILTRO.montoMin)) + '">' +
+          '<input class="entrada" id="f-max" type="number" inputmode="decimal" min="0" ' +
+            'placeholder="Hasta" aria-label="Monto hasta" value="' + esc(v(FILTRO.montoMax)) + '">' +
+        "</div></div>" +
+      '<div class="campo"><label>Fecha</label>' +
+        '<div class="campo-par">' +
+          '<input class="entrada" id="f-desde" type="date" aria-label="Fecha desde" value="' +
+            esc(FILTRO.fechaDesde) + '">' +
+          '<input class="entrada" id="f-hasta" type="date" aria-label="Fecha hasta" value="' +
+            esc(FILTRO.fechaHasta) + '">' +
+        "</div></div>" +
+      '<p class="campo__error" id="err-filtros" hidden role="alert"></p>' +
+      '<button class="btn btn--bloque" type="submit">Aplicar</button>' +
+      '<button class="btn btn--fantasma btn--bloque" type="button" id="f-limpiar" ' +
+        'style="margin-top:var(--s-3)">Quitar estos filtros</button>' +
+    "</form>",
+    caja => {
+      const err = caja.querySelector("#err-filtros");
+      caja.querySelector("#f-limpiar").addEventListener("click", () => {
+        FILTRO.montoMin = FILTRO.montoMax = null;
+        FILTRO.fechaDesde = FILTRO.fechaHasta = "";
+        reiniciarPagina(); cerrarHoja(); pintar();
+      });
+      caja.querySelector("#form-filtros").addEventListener("submit", e => {
+        e.preventDefault();
+        const num = id => {
+          const t = caja.querySelector(id).value.trim();
+          return t === "" ? null : Number(t);
+        };
+        const min = num("#f-min"), max = num("#f-max");
+        const desde = caja.querySelector("#f-desde").value;
+        const hasta = caja.querySelector("#f-hasta").value;
+        const fallar = txt => {
+          err.hidden = false;
+          err.innerHTML = svg("alerta", 15) + "<span>" + esc(txt) + "</span>";
+        };
+        err.hidden = true;
+        if ((min !== null && !(min >= 0)) || (max !== null && !(max >= 0)))
+          return fallar("Los montos tienen que ser números positivos.");
+        if (min !== null && max !== null && min > max)
+          return fallar("El monto de inicio no puede ser mayor que el de fin.");
+        if (desde && hasta && desde > hasta)
+          return fallar("La fecha de inicio no puede ser posterior a la de fin.");
+        FILTRO.montoMin = min; FILTRO.montoMax = max;
+        FILTRO.fechaDesde = desde; FILTRO.fechaHasta = hasta;
+        reiniciarPagina(); cerrarHoja(); pintar();
+      });
+    });
 }
 
 function pintarListaMovs() {
   const cont = document.getElementById("lista-movs");
   if (!cont) return;
   const movs = movsFiltrados();
-  const visibles = movs.slice(0, FILTRO.limite);
+  const paginas = Math.max(1, Math.ceil(movs.length / POR_PAGINA));
+  if (FILTRO.pagina > paginas) FILTRO.pagina = paginas;
+  const inicio = (FILTRO.pagina - 1) * POR_PAGINA;
+  const visibles = movs.slice(inicio, inicio + POR_PAGINA);
 
   const res = document.getElementById("resultado-movs");
   if (res) {
@@ -2017,7 +2153,7 @@ function pintarListaMovs() {
   }
 
   if (!movs.length) {
-    const hayFiltro = FILTRO.texto || FILTRO.tipo !== "todos" || FILTRO.cats.length;
+    const hayFiltro = FILTRO.texto || FILTRO.tipo !== "todos" || FILTRO.cats.length || hayFiltroFino();
     cont.innerHTML = '<div class="vacio"><div class="vacio__hoja">' + svg("hoja", 36) + "</div>" +
       '<p class="vacio__titulo">' + (hayFiltro ? "Nada coincide con tu búsqueda" : "Sin movimientos en este periodo") + "</p>" +
       '<p class="vacio__texto">' + (hayFiltro
@@ -2030,11 +2166,13 @@ function pintarListaMovs() {
     return;
   }
 
-  if (FILTRO.orden === "columnas") { cont.innerHTML = htmlDosColumnas(movs); return; }
+  if (FILTRO.orden === "monto") {
+    cont.innerHTML = htmlDosColumnas(visibles, movs) + htmlPaginador(movs.length, paginas);
+    return;
+  }
 
   let html = "", dia = null;
   visibles.forEach(m => {
-    if (FILTRO.orden === "monto") { html += filaMovimiento(m); return; }
     if (m.fecha !== dia) {
       dia = m.fecha;
       const delDia = visibles.filter(x => x.fecha === dia);
@@ -2046,12 +2184,7 @@ function pintarListaMovs() {
     html += filaMovimiento(m);
   });
 
-  if (movs.length > visibles.length) {
-    html += '<button class="btn btn--fantasma btn--bloque" type="button" id="ver-mas" ' +
-      'style="margin-top:var(--s-4)">Ver ' + Math.min(40, movs.length - visibles.length) +
-      " más de " + (movs.length - visibles.length) + "</button>";
-  }
-  cont.innerHTML = html;
+  cont.innerHTML = html + htmlPaginador(movs.length, paginas);
 }
 
 /* ---------- Movimientos ---------- */
@@ -2094,9 +2227,29 @@ function vistaMovimientos() {
       : "") +
 
     '<div class="segmentos" role="group" aria-label="Cómo ordenar" style="margin-bottom:var(--s-3)">' +
-      [["dia", "Por día"], ["monto", "Mayor a menor"], ["columnas", "Dos columnas"]].map(([k, t]) =>
+      [["dia", "Por día"], ["monto", "Mayor a menor"]].map(([k, t]) =>
         '<button type="button" data-forden="' + k + '" aria-pressed="' + (FILTRO.orden === k) + '">' +
         t + "</button>").join("") + "</div>" +
+
+    '<button class="btn btn--fantasma btn--bloque" type="button" id="btn-filtros" ' +
+      'style="margin-bottom:var(--s-3)">' + svg("filtro", 16) +
+      (hayFiltroFino() ? "Cambiar filtro de monto y fecha" : "Filtrar por monto o fecha") + "</button>" +
+
+    (hayFiltroFino()
+      ? '<div class="filtros-activos">' +
+        (FILTRO.montoMin !== null || FILTRO.montoMax !== null
+          ? '<button class="filtro-pill" type="button" data-quitar="monto">' +
+            "Monto " + (FILTRO.montoMin !== null ? fmt(FILTRO.montoMin, true) : "cualquiera") +
+            " a " + (FILTRO.montoMax !== null ? fmt(FILTRO.montoMax, true) : "cualquiera") +
+            svg("cerrar", 14) + "</button>"
+          : "") +
+        (FILTRO.fechaDesde || FILTRO.fechaHasta
+          ? '<button class="filtro-pill" type="button" data-quitar="fecha">' +
+            "Fecha " + (FILTRO.fechaDesde || "…") + " a " + (FILTRO.fechaHasta || "…") +
+            svg("cerrar", 14) + "</button>"
+          : "") +
+        "</div>"
+      : "") +
 
     '<div class="resultado" id="resultado-movs" aria-live="polite"></div>' +
     '<div class="tarjeta"><div id="lista-movs"></div></div>' +
@@ -4931,7 +5084,7 @@ document.addEventListener("click", async e => {
   if (per) {
     const max = topeDesfase();
     const siguiente = desfase + Number(per.dataset.periodo);
-    if (siguiente <= max) { desfase = siguiente; FILTRO.limite = 40; FILTRO.cats = []; pintar(); }
+    if (siguiente <= max) { desfase = siguiente; reiniciarPagina(); FILTRO.cats = []; pintar(); }
     return;
   }
 
@@ -5004,19 +5157,40 @@ document.addEventListener("click", async e => {
 
   // --- buscador y filtros ---
   if (t.closest("#limpia-busca")) {
-    FILTRO.texto = ""; FILTRO.limite = 40; pintar();
+    FILTRO.texto = ""; reiniciarPagina(); pintar();
     const c = document.getElementById("busca-mov"); if (c) c.focus();
     return;
   }
   if (t.closest("#limpiar-filtros")) {
-    FILTRO.texto = ""; FILTRO.tipo = "todos"; FILTRO.cats = []; FILTRO.limite = 40;
+    FILTRO.texto = ""; FILTRO.tipo = "todos"; FILTRO.cats = [];
+    FILTRO.montoMin = FILTRO.montoMax = null; FILTRO.fechaDesde = FILTRO.fechaHasta = "";
+    reiniciarPagina();
     pintar(); return;
   }
-  if (t.closest("#ver-mas")) { FILTRO.limite += 40; pintarListaMovs(); return; }
+  if (t.closest("#btn-filtros")) { hojaFiltros(); return; }
+
+  const pg = t.closest("[data-pag]");
+  if (pg) {
+    FILTRO.pagina += (pg.dataset.pag === "sig" ? 1 : -1);
+    if (FILTRO.pagina < 1) FILTRO.pagina = 1;
+    pintarListaMovs();
+    // Al cambiar de página se vuelve al inicio de la lista: quedarse a
+    // media hoja con contenido nuevo desorienta.
+    const lista = document.getElementById("lista-movs");
+    if (lista) lista.scrollIntoView({ block: "start" });
+    return;
+  }
+
+  const qt = t.closest("[data-quitar]");
+  if (qt) {
+    if (qt.dataset.quitar === "monto") { FILTRO.montoMin = FILTRO.montoMax = null; }
+    else { FILTRO.fechaDesde = FILTRO.fechaHasta = ""; }
+    reiniciarPagina(); pintar(); return;
+  }
 
   const ft = t.closest("[data-ftipo]");
   if (ft) {
-    FILTRO.tipo = ft.dataset.ftipo; FILTRO.limite = 40;
+    FILTRO.tipo = ft.dataset.ftipo; reiniciarPagina();
     document.querySelectorAll("[data-ftipo]").forEach(b =>
       b.setAttribute("aria-pressed", String(b === ft)));
     pintarListaMovs(); return;
@@ -5024,7 +5198,7 @@ document.addEventListener("click", async e => {
 
   const fo = t.closest("[data-forden]");
   if (fo) {
-    FILTRO.orden = fo.dataset.forden; FILTRO.limite = 40;
+    FILTRO.orden = fo.dataset.forden; reiniciarPagina();
     document.querySelectorAll("[data-forden]").forEach(b =>
       b.setAttribute("aria-pressed", String(b === fo)));
     pintarListaMovs(); return;
@@ -5036,7 +5210,7 @@ document.addEventListener("click", async e => {
     const i = FILTRO.cats.indexOf(id);
     if (i >= 0) FILTRO.cats.splice(i, 1); else FILTRO.cats.push(id);
     fc.setAttribute("aria-pressed", String(FILTRO.cats.includes(id)));
-    FILTRO.limite = 40;
+    reiniciarPagina();
     pintarListaMovs(); return;
   }
 
@@ -5157,7 +5331,7 @@ let temporizadorBusqueda = null;
 document.addEventListener("input", e => {
   if (e.target.id !== "busca-mov") return;
   FILTRO.texto = e.target.value;
-  FILTRO.limite = 40;
+  reiniciarPagina();
   // Pequeño retardo para no recalcular en cada tecla en listas largas.
   clearTimeout(temporizadorBusqueda);
   temporizadorBusqueda = setTimeout(() => {
