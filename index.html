@@ -327,6 +327,24 @@ textarea.entrada{padding:var(--s-3);min-height:72px;resize:vertical}
   margin:var(--s-5) 0 var(--s-1);
 }
 .dia-cab:first-child{margin-top:0}
+
+/* Presentación en dos columnas. En pantallas angostas se apilan: siguen
+   siendo dos bloques separados, que es lo que aporta la legibilidad. */
+.dos-col{display:grid;grid-template-columns:1fr;gap:var(--s-5)}
+@media(min-width:760px){
+  .dos-col{grid-template-columns:1fr 1fr;gap:0}
+  .dos-col__col+.dos-col__col{border-left:1px solid var(--linea);padding-left:var(--s-5)}
+  .dos-col__col:first-child{padding-right:var(--s-5)}
+}
+.col-cab{
+  display:flex;align-items:baseline;justify-content:space-between;gap:var(--s-3);
+  padding-bottom:var(--s-2);margin-bottom:var(--s-2);border-bottom:1px solid var(--linea);
+}
+.col-cab__t{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-suave)}
+.col-cab__n{font-size:15px;font-family:var(--serif);font-variant-numeric:tabular-nums}
+.col-cab__n.ingreso{color:var(--verde-bosque)}
+.col-cab__n.gasto{color:var(--alerta)}
+.col-vacia{padding:var(--s-5) 0;font-size:14px;color:var(--tinta-suave)}
 .dia-cab__fecha{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-suave)}
 .dia-cab__neto{font-size:12px;color:var(--tinta-suave);font-variant-numeric:tabular-nums}
 
@@ -1885,7 +1903,13 @@ document.addEventListener("keydown", e => {
    ---------------------------------------------------------------- */
 
 /** Estado del buscador. Vive fuera de datos: no tiene por qué persistir. */
-const FILTRO = { texto: "", tipo: "todos", cats: [], limite: 40 };
+// `orden` gobierna la presentación completa, no solo el criterio de
+// ordenamiento: agrupar por día y ordenar por monto son excluyentes,
+// y mezclarlos produce una lista sin encabezados con fechas salteadas.
+//   "dia"      · agrupado por día, del más reciente al más antiguo
+//   "monto"    · lista plana, de mayor a menor
+//   "columnas" · entradas y salidas separadas, cada una de mayor a menor
+const FILTRO = { texto: "", tipo: "todos", cats: [], limite: 40, orden: "dia" };
 
 /**
  * Aplica buscador y filtros sobre los movimientos de la ventana visible.
@@ -1903,7 +1927,12 @@ function movsFiltrados() {
       normalizar(x.metodo).includes(q) ||
       String(x.monto).includes(q));
   }
-  return m.slice().sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.creado || 0) - (a.creado || 0));
+  m = m.slice();
+  if (FILTRO.orden === "dia")
+    m.sort((a, b) => b.fecha.localeCompare(a.fecha) || (b.creado || 0) - (a.creado || 0));
+  else
+    m.sort((a, b) => b.monto - a.monto || b.fecha.localeCompare(a.fecha));
+  return m;
 }
 
 /** Categorías presentes en la ventana, con su conteo, para las fichas. */
@@ -1917,6 +1946,58 @@ function catsPresentes() {
 }
 
 /** Pinta solo la lista, sin volver a montar la vista: conserva el foco del buscador. */
+/**
+ * Una fila de movimiento. Se comparte entre las tres presentaciones para
+ * que el detalle, la pastilla de ámbito y el signo no se dupliquen.
+ * @param {object} m movimiento
+ * @returns {string} HTML
+ */
+function filaMovimiento(m) {
+  const esIngreso = m.tipo === "ingreso";
+  return '<div class="reg">' +
+    '<button class="reg__abrir" type="button" data-mov="' + m.id + '">' +
+      '<span class="reg__icono' + (esIngreso ? " ingreso" : "") + '">' +
+        svg(esIngreso ? "entra" : "sale", 17) + "</span>" +
+      '<span class="reg__cuerpo">' +
+        '<span class="reg__nombre">' + esc(m.nota || nombreCategoria(m.categoria)) + "</span>" +
+        '<span class="reg__meta">' + esc(nombreCategoria(m.categoria)) +
+          (m.metodo ? " · " + esc(m.metodo) : "") +
+          (usaAmbitos() && m.ambito === "negocio" ? '<span class="pastilla pastilla--amb">Negocio</span>' : "") +
+        "</span>" +
+      "</span>" +
+      '<span class="reg__monto num ' + (esIngreso ? "ingreso" : "gasto") + '">' +
+        (esIngreso ? "+" : "−") + fmt(m.monto) + "</span>" +
+    "</button></div>";
+}
+
+/**
+ * Entradas y salidas lado a lado, cada columna de mayor a menor.
+ * El tope de filas se aplica por columna: una lista larga de gastos no
+ * debe esconder los ingresos.
+ * @param {Array} movs ya filtrados y ordenados por monto
+ * @returns {string} HTML
+ */
+function htmlDosColumnas(movs) {
+  const cols = [
+    { clase: "ingreso", titulo: "Entró", filas: movs.filter(m => m.tipo === "ingreso") },
+    { clase: "gasto",   titulo: "Salió", filas: movs.filter(m => m.tipo === "gasto") }
+  ];
+  return '<div class="dos-col">' + cols.map(c => {
+    const total = c.filas.reduce((s, m) => s + m.monto, 0);
+    const vis = c.filas.slice(0, FILTRO.limite);
+    return '<div class="dos-col__col">' +
+      '<div class="col-cab"><span class="col-cab__t">' + c.titulo + " · " + c.filas.length + "</span>" +
+        '<span class="col-cab__n ' + c.clase + '">' + fmt(total, true) + "</span></div>" +
+      (vis.length
+        ? vis.map(filaMovimiento).join("") +
+          (c.filas.length > vis.length
+            ? '<p class="col-vacia">y ' + (c.filas.length - vis.length) + " más</p>"
+            : "")
+        : '<p class="col-vacia">Nada en este periodo.</p>') +
+      "</div>";
+  }).join("") + "</div>";
+}
+
 function pintarListaMovs() {
   const cont = document.getElementById("lista-movs");
   if (!cont) return;
@@ -1945,8 +2026,11 @@ function pintarListaMovs() {
     return;
   }
 
+  if (FILTRO.orden === "columnas") { cont.innerHTML = htmlDosColumnas(movs); return; }
+
   let html = "", dia = null;
   visibles.forEach(m => {
+    if (FILTRO.orden === "monto") { html += filaMovimiento(m); return; }
     if (m.fecha !== dia) {
       dia = m.fecha;
       const delDia = visibles.filter(x => x.fecha === dia);
@@ -1955,21 +2039,7 @@ function pintarListaMovs() {
         esc(FMT_LARGO.format(aFecha(dia))) + "</span>" +
         '<span class="dia-cab__neto">' + (neto >= 0 ? "+" : "−") + fmt(Math.abs(neto), true) + "</span></div>";
     }
-    const esIngreso = m.tipo === "ingreso";
-    html += '<div class="reg">' +
-      '<button class="reg__abrir" type="button" data-mov="' + m.id + '">' +
-        '<span class="reg__icono' + (esIngreso ? " ingreso" : "") + '">' +
-          svg(esIngreso ? "entra" : "sale", 17) + "</span>" +
-        '<span class="reg__cuerpo">' +
-          '<span class="reg__nombre">' + esc(m.nota || nombreCategoria(m.categoria)) + "</span>" +
-          '<span class="reg__meta">' + esc(nombreCategoria(m.categoria)) +
-            (m.metodo ? " · " + esc(m.metodo) : "") +
-            (usaAmbitos() && m.ambito === "negocio" ? '<span class="pastilla pastilla--amb">Negocio</span>' : "") +
-          "</span>" +
-        "</span>" +
-        '<span class="reg__monto num ' + (esIngreso ? "ingreso" : "gasto") + '">' +
-          (esIngreso ? "+" : "−") + fmt(m.monto) + "</span>" +
-      "</button></div>";
+    html += filaMovimiento(m);
   });
 
   if (movs.length > visibles.length) {
@@ -2018,6 +2088,11 @@ function vistaMovimientos() {
           FILTRO.cats.includes(c.id) + '">' + esc(c.nombre) +
           '<span class="chip__n">' + c.n + "</span></button>").join("") + "</div>"
       : "") +
+
+    '<div class="segmentos" role="group" aria-label="Cómo ordenar" style="margin-bottom:var(--s-3)">' +
+      [["dia", "Por día"], ["monto", "Mayor a menor"], ["columnas", "Dos columnas"]].map(([k, t]) =>
+        '<button type="button" data-forden="' + k + '" aria-pressed="' + (FILTRO.orden === k) + '">' +
+        t + "</button>").join("") + "</div>" +
 
     '<div class="resultado" id="resultado-movs" aria-live="polite"></div>' +
     '<div class="tarjeta"><div id="lista-movs"></div></div>' +
@@ -4940,6 +5015,14 @@ document.addEventListener("click", async e => {
     FILTRO.tipo = ft.dataset.ftipo; FILTRO.limite = 40;
     document.querySelectorAll("[data-ftipo]").forEach(b =>
       b.setAttribute("aria-pressed", String(b === ft)));
+    pintarListaMovs(); return;
+  }
+
+  const fo = t.closest("[data-forden]");
+  if (fo) {
+    FILTRO.orden = fo.dataset.forden; FILTRO.limite = 40;
+    document.querySelectorAll("[data-forden]").forEach(b =>
+      b.setAttribute("aria-pressed", String(b === fo)));
     pintarListaMovs(); return;
   }
 
