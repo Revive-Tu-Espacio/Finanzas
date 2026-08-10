@@ -145,9 +145,12 @@ p{text-wrap:pretty}
 }
 .reg:last-child{border-bottom:none}
 .reg__cuerpo{flex:1;min-width:0}
-.reg__nombre{font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.reg__meta{font-size:13px;color:var(--tinta-suave);margin-top:2px}
-.reg__monto{font-size:16px;font-weight:600;flex:none}
+.reg__nombre{
+  display:block;font-size:15px;font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.reg__meta{display:block;font-size:13px;color:var(--tinta-suave);margin-top:2px}
+.reg__monto{font-size:16px;font-weight:600;flex:none;white-space:nowrap}
 .reg__monto.ingreso{color:var(--verde-bosque)}
 .reg__monto.gasto{color:var(--tinta)}
 .reg__borrar{
@@ -330,9 +333,10 @@ textarea.entrada{padding:var(--s-3);min-height:72px;resize:vertical}
 
 /* Presentación en dos columnas. En pantallas angostas se apilan: siguen
    siendo dos bloques separados, que es lo que aporta la legibilidad. */
-.dos-col{display:grid;grid-template-columns:1fr;gap:var(--s-5)}
+.dos-col{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--s-5)}
+.dos-col__col{min-width:0}
 @media(min-width:760px){
-  .dos-col{grid-template-columns:1fr 1fr;gap:0}
+  .dos-col{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0}
   .dos-col__col+.dos-col__col{border-left:1px solid var(--linea);padding-left:var(--s-5)}
   .dos-col__col:first-child{padding-right:var(--s-5)}
 }
