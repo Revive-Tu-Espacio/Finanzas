@@ -1367,8 +1367,8 @@ function totales(desplazamiento) {
  * @returns {{pct:number|null, signo:string}} pct null cuando no hay base
  *   de comparación: pasar de 0 a cualquier cosa no es un porcentaje.
  */
-function variacion(actual, previo) {
-  if (!previo) return { pct: null, signo: actual > 0 ? "mas" : "igual" };
+function variacionResumen(actual, previo) {
+  if (!previo || !Number.isFinite(previo)) return { pct: null, signo: "igual" };
   const pct = Math.round((actual - previo) / previo * 100);
   return { pct, signo: pct > 0 ? "mas" : pct < 0 ? "menos" : "igual" };
 }
@@ -1991,11 +1991,11 @@ function vistaResumen() {
 
   // Comparativo con el periodo anterior. Una cifra suelta no dice si el
   // mes va bien; contra el anterior, sí.
-  const prev = totales(desfase - 1);
-  const dIng = variacion(t.ingresos, prev.ingresos);
-  const dGas = variacion(t.gastos, prev.gastos);
+  const prev = totales(desfase - 1) || {};
+  const dIng = variacionResumen(t.ingresos, prev.ingresos);
+  const dGas = variacionResumen(t.gastos, prev.gastos);
   const rotuloDelta = d =>
-    d.pct === null ? "" :
+    !d || d.pct === null ? "" :
     '<span class="delta delta--' + d.signo + '">' +
       (d.pct > 0 ? "+" : "") + d.pct + "% vs. antes</span>";
 
@@ -5605,7 +5605,23 @@ window.addEventListener("unhandledrejection", () => avisar("Algo falló. Si se r
     }
   } catch (_) { /* no todos los navegadores lo soportan; no es motivo de falla */ }
 
-  pintar();
+  // Si el primer pintado falla, el contenido de #vista se queda como está
+  // en el HTML: la pantalla de rescate, que dice "ábrela en tu navegador".
+  // Ese mensaje sería falso y mandaría a la persona a perseguir un problema
+  // que no tiene. Mejor decir la verdad y ofrecerle salvar sus datos.
+  try {
+    pintar();
+  } catch (e) {
+    console.error("Falló el primer pintado:", e);
+    document.getElementById("vista").innerHTML =
+      '<div class="tarjeta"><div class="vacio">' +
+        '<div class="vacio__hoja">' + svg("alerta", 36) + "</div>" +
+        '<p class="vacio__titulo">Algo falló al dibujar la pantalla</p>' +
+        '<p class="vacio__texto">Tus datos siguen guardados en este dispositivo. ' +
+        "Descarga un respaldo antes de hacer cualquier otra cosa y repórtalo.</p>" +
+        '<button class="btn" type="button" data-ir="ajustes">Ir a respaldo</button>' +
+      "</div></div>";
+  }
 })();
 </script>
 </body>
