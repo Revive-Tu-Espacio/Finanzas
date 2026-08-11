@@ -922,7 +922,15 @@ const Nube = (() => {
       return mal("SESION", "Tu sesión venció. Entra de nuevo.");
     }
     if (!r.ok) return traducir(r);
-    return bien(await r.json());
+    // PostgREST responde 200 con cuerpo vacio cuando la funcion no
+    // devuelve nada. r.json() truena ahi, y ese error terminaba en el
+    // aviso generico aunque el guardado hubiera salido bien.
+    let contenido = null;
+    try {
+      const texto = await r.text();
+      contenido = texto ? JSON.parse(texto) : null;
+    } catch (_) { contenido = null; }
+    return bien(contenido);
   }
 
   /**
@@ -5248,9 +5256,10 @@ async function subirALaNube() {
   avisar("Guardando en la nube…");
   const r = await Nube.subir(datos);
   if (!r.ok) { avisar(r.mensaje); if (r.codigo === "SESION") pintar(); return; }
-  const c = r.datos || {};
-  avisar("Guardado: " + (c.movimientos || 0) + " movimientos y " +
-         (c.por_cobrar || 0) + " por cobrar.");
+  const c = r.datos;
+  avisar(c && c.movimientos != null
+    ? "Guardado: " + c.movimientos + " movimientos y " + (c.por_cobrar || 0) + " por cobrar."
+    : "Guardado en la nube.");
 }
 
 /** Trae el estado de la nube. Pide confirmación: reemplaza lo local. */
@@ -5579,8 +5588,18 @@ document.addEventListener("change", e => {
 });
 
 /* Red de seguridad: un error no debe dejar la pantalla en blanco. */
-window.addEventListener("error", () => avisar("Algo falló. Si se repite, exporta tu respaldo."));
-window.addEventListener("unhandledrejection", () => avisar("Algo falló. Si se repite, exporta tu respaldo."));
+function detalleError(x) {
+  if (!x) return "error desconocido";
+  return String(x.message || x).slice(0, 90);
+}
+window.addEventListener("error", ev => {
+  console.error("Error no capturado:", ev.error || ev.message);
+  avisar("Falló: " + detalleError(ev.error || ev.message));
+});
+window.addEventListener("unhandledrejection", ev => {
+  console.error("Promesa rechazada:", ev.reason);
+  avisar("Falló: " + detalleError(ev.reason));
+});
 
 /* ----------------------------------------------------------------
    10. ARRANQUE
