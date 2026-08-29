@@ -158,6 +158,12 @@ p{text-wrap:pretty}
   background:transparent;border:none;border-radius:var(--r-full);color:var(--tinta-suave);
 }
 .reg__borrar:hover{background:var(--alerta-suave);color:var(--alerta)}
+.reg__abonar{
+  flex:none;width:44px;height:44px;display:grid;place-items:center;
+  background:transparent;border:none;border-radius:var(--r-full);color:var(--tinta-suave);
+  touch-action:manipulation;-webkit-tap-highlight-color:rgba(68,92,56,.12);
+}
+.reg__abonar:hover{background:var(--verde-claro);color:var(--verde-bosque)}
 
 .dia-rotulo{
   font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-suave);
@@ -1431,7 +1437,8 @@ const ICONO = {
   importar:'<path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 17v3h16v-3"/>',
   lupa:    '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
   entra:   '<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>',
-  sale:    '<path d="M12 5v14"/><path d="M6 13l6 6 6-6"/>'
+  sale:    '<path d="M12 5v14"/><path d="M6 13l6 6 6-6"/>',
+  abono:   '<path d="M12 4v9"/><path d="M8 9l4 4 4-4"/><path d="M4 17h16"/>'
 };
 
 /**
@@ -2828,9 +2835,12 @@ function bloqueDeudas() {
     '<li class="reg"><div class="reg__cuerpo">' +
       '<div class="reg__nombre">' + (i + 1) + ". " + esc(d.nombre) + "</div>" +
       '<div class="reg__meta">Pago ' + fmt(d.pagoMensual || 0, true) +
-        " al mes · " + (d.tasa ? d.tasa + "% anual" : "sin tasa registrada") + "</div>" +
+        " al mes · " + (d.tasa ? d.tasa + "% anual" : "sin tasa registrada") +
+        (d.abonado ? " · Ya bajaste " + fmt(d.abonado, true) : "") + "</div>" +
     "</div>" +
     '<span class="reg__monto num">' + fmt(d.saldo, true) + "</span>" +
+    '<button class="reg__abonar" type="button" data-abonar-deuda="' + d.id + '" aria-label="Abonar a ' + esc(d.nombre) + '">' +
+      svg("abono", 18) + "</button>" +
     '<button class="reg__borrar" type="button" data-borrar-deuda="' + d.id + '" aria-label="Quitar deuda ' + esc(d.nombre) + '">' +
       svg("bote", 18) + "</button></li>"
   ).join("") + "</ol></div>";
@@ -3240,6 +3250,79 @@ function hojaDeuda() {
         tasa: Math.max(0, parseFloat(caja.querySelector("#d-tasa").value) || 0)
       });
       await persistir(); cerrarHoja(); avisar("Deuda registrada"); pintar();
+    });
+  });
+}
+
+/**
+ * Panel lateral para abonar a una deuda. Entra desde la derecha para que
+ * la lista de deudas siga visible detrás mientras la persona decide cuánto.
+ *
+ * Al confirmar: baja el saldo, acumula lo abonado en d.abonado y, salvo que
+ * la persona lo desmarque, registra el gasto del día con categoría "deuda"
+ * para que el pago aparezca en el resumen y los reportes. Si el saldo llega
+ * a cero, la deuda se retira del plan.
+ */
+function panelAbonoDeuda(deudaId) {
+  const d = datos.deudas.find(x => x.id === deudaId);
+  if (!d) return;
+  const sugerido = d.pagoMensual > 0 ? Math.min(d.pagoMensual, d.saldo) : 0;
+  const cuerpo =
+    '<form id="form-abono-deuda" novalidate>' +
+      '<p style="margin:0 0 var(--s-4);font-size:15px;color:var(--tinta-suave)">' +
+        'Debes hoy <strong class="num" style="color:var(--tinta)">' + fmt(d.saldo) + "</strong>" +
+        (d.abonado ? ". Ya has abonado " + fmt(d.abonado, true) + "." : ".") + "</p>" +
+      '<div class="campo"><label for="ad-monto">¿Cuánto abonas?</label>' +
+        '<input class="entrada entrada--monto" id="ad-monto" type="number" inputmode="decimal" ' +
+          'min="0.01" step="0.01" required placeholder="0.00"' +
+          (sugerido ? ' value="' + sugerido + '"' : "") + ">" +
+        (sugerido ? '<p class="campo__ayuda">Te sugiero tu pago mensual. Puedes cambiarlo.</p>' : "") + "</div>" +
+      '<button class="btn btn--fantasma btn--bloque" type="button" id="ad-todo" style="margin-bottom:var(--s-4)">' +
+        "Liquidarla completa (" + fmt(d.saldo, true) + ")</button>" +
+      '<div class="campo"><label for="ad-fecha">¿Cuándo?</label>' +
+        '<input class="entrada" id="ad-fecha" type="date" value="' + aISO(hoy()) + '" max="' + aISO(hoy()) + '"></div>' +
+      '<div class="campo"><label style="display:flex;align-items:center;gap:var(--s-2);font-size:15px">' +
+        '<input type="checkbox" id="ad-gasto" checked> Registrarlo también como gasto</label>' +
+        '<p class="campo__ayuda">Así el pago aparece en tu resumen. Desmárcalo solo si ya lo capturaste en tus movimientos.</p></div>' +
+      '<p class="campo__error" id="err-abono-deuda" hidden></p>' +
+      '<button class="btn btn--bloque" type="submit">Abonar</button>' +
+    "</form>";
+
+  abrirPanel("Abonar a " + d.nombre, cuerpo, caja => {
+    caja.querySelector("#ad-todo").addEventListener("click", () => {
+      const c = caja.querySelector("#ad-monto");
+      c.value = d.saldo; c.focus();
+    });
+    caja.querySelector("#form-abono-deuda").addEventListener("submit", async e => {
+      e.preventDefault();
+      const monto = parseFloat(caja.querySelector("#ad-monto").value);
+      const err = caja.querySelector("#err-abono-deuda");
+      if (!Number.isFinite(monto) || monto <= 0) {
+        err.hidden = false;
+        err.innerHTML = svg("alerta", 15) + "<span>Escribe cuánto abonas.</span>";
+        return;
+      }
+      if (monto > d.saldo + 0.005) {
+        err.hidden = false;
+        err.innerHTML = svg("alerta", 15) + "<span>Debes " + fmt(d.saldo, true) +
+          "; el abono no puede ser mayor. Si pagaste de más, registra la diferencia como gasto aparte.</span>";
+        return;
+      }
+      const fecha = caja.querySelector("#ad-fecha").value || aISO(hoy());
+      if (caja.querySelector("#ad-gasto").checked) {
+        datos.movimientos.push({
+          id: id(), tipo: "gasto", monto: Math.round(monto * 100) / 100,
+          categoria: "deuda", fecha, metodo: "", nota: "Abono a " + d.nombre,
+          ambito: ambitoActivo() === "negocio" ? "negocio" : "personal", creado: Date.now()
+        });
+      }
+      d.abonado = Math.round(((d.abonado || 0) + monto) * 100) / 100;
+      d.saldo = Math.round((d.saldo - monto) * 100) / 100;
+      const liquidada = d.saldo <= 0;
+      if (liquidada) datos.deudas = datos.deudas.filter(x => x.id !== d.id);
+      await persistir(); cerrarPanel();
+      avisar(liquidada ? "¡Liquidaste esta deuda! Una menos." : "Abono registrado. Debes " + fmt(d.saldo, true));
+      pintar();
     });
   });
 }
@@ -5336,6 +5419,9 @@ document.addEventListener("click", async e => {
 
   const abonar = t.closest("[data-abonar]");
   if (abonar) { hojaAbono(abonar.dataset.abonar); return; }
+
+  const abonarDeuda = t.closest("[data-abonar-deuda]");
+  if (abonarDeuda) { panelAbonoDeuda(abonarDeuda.dataset.abonarDeuda); return; }
 
   const bm = t.closest("[data-borrar-mov]");
   if (bm) {
