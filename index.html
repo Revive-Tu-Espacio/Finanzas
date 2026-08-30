@@ -182,6 +182,29 @@ p{text-wrap:pretty}
 .insignia--pronto{background:var(--aviso-suave);color:var(--aviso)}
 .insignia--corriente{background:var(--verde-claro);color:var(--verde-bosque)}
 
+/* ---------- Carpetas plegables (cobros agrupados) ---------- */
+.carpeta{
+  display:flex;align-items:center;gap:var(--s-3);width:100%;min-height:56px;
+  padding:var(--s-3) 0;background:transparent;border:none;
+  border-bottom:1px solid var(--linea);text-align:left;
+  touch-action:manipulation;-webkit-tap-highlight-color:rgba(68,92,56,.12);
+}
+.carpeta__flecha{
+  flex:none;display:grid;place-items:center;color:var(--tinta-suave);
+  transition:transform .18s ease-out;
+}
+.carpeta[aria-expanded="true"] .carpeta__flecha{transform:rotate(90deg)}
+.carpeta__nombre{
+  flex:1;min-width:0;font-size:15px;font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.carpeta__meta{display:block;font-size:12px;font-weight:400;color:var(--tinta-suave);margin-top:1px}
+.carpeta__monto{flex:none;font-size:15px;font-weight:600;white-space:nowrap}
+.carpeta-hijos{
+  list-style:none;margin:0 0 0 var(--s-2);padding:0 0 0 var(--s-3);
+  border-left:2px solid var(--verde-claro);
+}
+
 .dia-rotulo{
   font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-suave);
   margin:var(--s-5) 0 var(--s-1);
@@ -4427,6 +4450,43 @@ function totalPorCobrar() {
   return filtrarAmbito(datos.porCobrar.filter(c => !c.cobrado)).reduce((s, c) => s + pendienteCobro(c), 0);
 }
 
+/**
+ * Carpetas de cobros abiertas en esta vista. Es estado de interfaz, no de
+ * datos: vive en memoria, no se persiste ni viaja a la nube, y al recargar
+ * todas vuelven a empezar cerradas.
+ * @type {Set<string>}
+ */
+let cobrosAbiertos = new Set();
+
+/**
+ * Una fila de cuenta por cobrar: chip con inicial, nombre, detalle,
+ * insignia de vencimiento, avance de pagos y acciones de 44 px.
+ * La usan igual la lista plana y las carpetas.
+ * @param {object} c cuenta de datos.porCobrar
+ * @returns {string} HTML del <li>
+ */
+function filaCobro(c) {
+  const quien = c.persona || c.concepto;
+  const saldo = pendienteCobro(c);
+  const meta = [
+    c.persona ? esc(c.concepto) : null,
+    esc(c.tipo || "Sin clasificar"),
+    c.fecha ? "desde el " + esc(FMT_DIA.format(aFecha(c.fecha))) : null
+  ].filter(Boolean).join(" · ");
+  return '<li class="reg">' +
+    '<span class="chip-inicial" aria-hidden="true">' + esc(String(quien).trim().charAt(0).toUpperCase() || "?") + "</span>" +
+    '<div class="reg__cuerpo">' +
+      '<div class="reg__nombre">' + esc(quien) + "</div>" +
+      '<div class="reg__meta">' + meta + insigniaPromesa(c.fechaPromesa) + "</div>" +
+      (c.abonado > 0 ? avanceHTML(c.abonado, c.monto, "Ya te pagó " + fmt(c.abonado, true) + " de " + fmt(c.monto, true)) : "") +
+    "</div>" +
+    '<span class="reg__monto num">' + fmt(saldo, true) + "</span>" +
+    '<button class="reg__abonar" type="button" data-abonar-cobro="' + c.id + '" ' +
+      'aria-label="Registrar un pago de ' + esc(quien) + '">' + svg("abono", 18) + "</button>" +
+    '<button class="reg__borrar" type="button" data-borrar-cobro="' + c.id + '" ' +
+      'aria-label="Quitar la cuenta de ' + esc(quien) + '">' + svg("bote", 18) + "</button></li>";
+}
+
 function bloquePorCobrar() {
   const pendientes = filtrarAmbito(datos.porCobrar.filter(c => !c.cobrado));
   const cobradas = filtrarAmbito(datos.porCobrar.filter(c => c.cobrado)).slice(-5).reverse();
@@ -4471,28 +4531,40 @@ function bloquePorCobrar() {
     return (b.creado || 0) - (a.creado || 0);
   });
 
-  html += '<div class="tarjeta"><h2 class="tarjeta__titulo">Pendientes de cobro</h2><ul class="lista">' +
-    orden.map(c => {
-      const quien = c.persona || c.concepto;
-      const saldo = pendienteCobro(c);
-      const meta = [
-        c.persona ? esc(c.concepto) : null,
-        esc(c.tipo || "Sin clasificar"),
-        c.fecha ? "desde el " + esc(FMT_DIA.format(aFecha(c.fecha))) : null
-      ].filter(Boolean).join(" · ");
-      return '<li class="reg">' +
-        '<span class="chip-inicial" aria-hidden="true">' + esc(String(quien).trim().charAt(0).toUpperCase() || "?") + "</span>" +
-        '<div class="reg__cuerpo">' +
-          '<div class="reg__nombre">' + esc(quien) + "</div>" +
-          '<div class="reg__meta">' + meta + insigniaPromesa(c.fechaPromesa) + "</div>" +
-          (c.abonado > 0 ? avanceHTML(c.abonado, c.monto, "Ya te pagó " + fmt(c.abonado, true) + " de " + fmt(c.monto, true)) : "") +
-        "</div>" +
-        '<span class="reg__monto num">' + fmt(saldo, true) + "</span>" +
-        '<button class="reg__abonar" type="button" data-abonar-cobro="' + c.id + '" ' +
-          'aria-label="Registrar un pago de ' + esc(quien) + '">' + svg("abono", 18) + "</button>" +
-        '<button class="reg__borrar" type="button" data-borrar-cobro="' + c.id + '" ' +
-          'aria-label="Quitar la cuenta de ' + esc(quien) + '">' + svg("bote", 18) + "</button></li>";
-    }).join("") + "</ul></div>";
+  // Con pocas cuentas, la lista plana se recorre de un vistazo. Con muchas,
+  // se agrupa en carpetas plegables por persona (o tipo), estilo explorador:
+  // cerradas muestran subtotal y conteo; un toque las abre.
+  const grupos = new Map();
+  orden.forEach(c => {
+    const k = c.persona || c.tipo || "Sin clasificar";
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(c);
+  });
+  const usarCarpetas = orden.length > 5 && grupos.size > 1;
+
+  html += '<div class="tarjeta"><h2 class="tarjeta__titulo">Pendientes de cobro</h2><ul class="lista">';
+  if (!usarCarpetas) {
+    html += orden.map(filaCobro).join("");
+  } else {
+    html += [...grupos.entries()].map(([k, hijos]) => {
+      const abierta = cobrosAbiertos.has(k);
+      const sub = hijos.reduce((s, c) => s + pendienteCobro(c), 0);
+      const vencidas = hijos.filter(c => c.fechaPromesa && diasEntre(hoy(), aFecha(c.fechaPromesa)) < 0).length;
+      return "<li>" +
+        '<button class="carpeta" type="button" data-carpeta="' + esc(k) + '" aria-expanded="' + abierta + '">' +
+          '<span class="carpeta__flecha">' + svg("adelante", 16) + "</span>" +
+          '<span class="chip-inicial" aria-hidden="true">' + esc(String(k).trim().charAt(0).toUpperCase() || "?") + "</span>" +
+          '<span class="carpeta__nombre">' + esc(k) +
+            '<span class="carpeta__meta">' + hijos.length + (hijos.length === 1 ? " cuenta" : " cuentas") +
+              (vencidas ? ' · <span class="insignia insignia--vencida">' + vencidas + (vencidas === 1 ? " vencida" : " vencidas") + "</span>" : "") +
+            "</span></span>" +
+          '<span class="carpeta__monto num">' + fmt(sub, true) + "</span>" +
+        "</button>" +
+        (abierta ? '<ul class="carpeta-hijos">' + hijos.map(filaCobro).join("") + "</ul>" : "") +
+      "</li>";
+    }).join("");
+  }
+  html += "</ul></div>";
 
   if (cobradas.length) {
     html += '<div class="tarjeta"><h2 class="tarjeta__titulo">Cobrado recientemente</h2><ul class="lista">' +
@@ -5689,6 +5761,14 @@ document.addEventListener("click", async e => {
 
   const abonoCobro = t.closest("[data-abonar-cobro]");
   if (abonoCobro) { panelAbonoCobro(abonoCobro.dataset.abonarCobro); return; }
+
+  const carpeta = t.closest("[data-carpeta]");
+  if (carpeta) {
+    const k = carpeta.dataset.carpeta;
+    if (cobrosAbiertos.has(k)) cobrosAbiertos.delete(k); else cobrosAbiertos.add(k);
+    pintar(); // solo interfaz: sin persistir(), esto no toca los datos
+    return;
+  }
 
   const bcob = t.closest("[data-borrar-cobro]");
   if (bcob) {
