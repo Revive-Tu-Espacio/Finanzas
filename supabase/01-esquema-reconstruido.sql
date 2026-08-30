@@ -222,6 +222,7 @@ select usuario_id,
 create or replace function public.tocar_actualizado_en()
 returns trigger
 language plpgsql
+set search_path to 'public'
 as $function$
 begin
   new.actualizado_en = now();
