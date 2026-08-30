@@ -14,7 +14,7 @@
 <link rel="icon" href="/icono-192.png" sizes="192x192">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' https://kbjtzvgafhmiuacyugag.supabase.co; form-action 'none'; base-uri 'none'; frame-ancestors 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; manifest-src 'self'; connect-src 'self' https://kbjtzvgafhmiuacyugag.supabase.co; form-action 'none'; base-uri 'none'; frame-ancestors 'none'">
 <title>Mis finanzas · Revive tu Espacio A.C.</title>
 <style>
 /* ============================================================
@@ -164,6 +164,23 @@ p{text-wrap:pretty}
   touch-action:manipulation;-webkit-tap-highlight-color:rgba(68,92,56,.12);
 }
 .reg__abonar:hover{background:var(--verde-claro);color:var(--verde-bosque)}
+
+/* ---------- Deudas y cobros: avance, iniciales e insignias ---------- */
+.avance{height:5px;background:var(--verde-claro);border-radius:var(--r-full);overflow:hidden;margin-top:6px}
+.avance__relleno{height:100%;background:var(--verde-hoja);border-radius:var(--r-full)}
+.avance-nota{display:block;font-size:12px;color:var(--tinta-suave);margin-top:3px}
+.chip-inicial{
+  flex:none;width:36px;height:36px;display:grid;place-items:center;
+  background:var(--verde-claro);color:var(--verde-bosque);
+  border-radius:var(--r-full);font-weight:600;font-size:15px;user-select:none;
+}
+.insignia{
+  display:inline-block;font-size:11px;font-weight:600;letter-spacing:.02em;
+  padding:1px 8px;border-radius:var(--r-full);white-space:nowrap;
+}
+.insignia--vencida{background:var(--alerta-suave);color:var(--alerta)}
+.insignia--pronto{background:var(--aviso-suave);color:var(--aviso)}
+.insignia--corriente{background:var(--verde-claro);color:var(--verde-bosque)}
 
 .dia-rotulo{
   font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--tinta-suave);
@@ -1695,7 +1712,7 @@ function hojaAlertas() {
 /** Pestañas: lo que debo y lo que me deben. */
 function vistaDeudas() {
   const t = datos.pestanaBalance || "debo";
-  const pend = filtrarAmbito(datos.porCobrar.filter(c => !c.cobrado)).reduce((s, c) => s + c.monto, 0);
+  const pend = filtrarAmbito(datos.porCobrar.filter(c => !c.cobrado)).reduce((s, c) => s + pendienteCobro(c), 0);
   return '<h1 class="sr-only">Deudas y cuentas por cobrar</h1>' +
     '<div class="segmentos" role="group" aria-label="Balance" style="margin-bottom:var(--s-4)">' +
       '<button type="button" data-balance="debo" aria-pressed="' + (t === "debo") + '">Debo</button>' +
@@ -1972,16 +1989,16 @@ function graficaFlujo(t) {
 function tarjetaPorCobrar() {
   const abiertas = (datos.porCobrar || []).filter(c => !c.cobrado);
   if (!abiertas.length) return "";
-  const total = abiertas.reduce((s, c) => s + c.monto, 0);
-  const top = abiertas.slice().sort((a, b) => b.monto - a.monto).slice(0, 3);
+  const total = abiertas.reduce((s, c) => s + pendienteCobro(c), 0);
+  const top = abiertas.slice().sort((a, b) => pendienteCobro(b) - pendienteCobro(a)).slice(0, 3);
   return '<div class="tarjeta"><h2 class="tarjeta__titulo">Te deben</h2>' +
     '<div class="det-cab"><span class="det-cab__rotulo">' + abiertas.length +
       (abiertas.length === 1 ? " cuenta abierta" : " cuentas abiertas") + "</span>" +
       '<span class="det-cab__monto num">' + fmt(total) + "</span></div>" +
     top.map(c =>
       '<div class="reg"><span class="reg__cuerpo">' +
-        '<span class="reg__nombre">' + esc(c.concepto) + "</span></span>" +
-        '<span class="reg__monto num">' + fmt(c.monto) + "</span></div>").join("") +
+        '<span class="reg__nombre">' + esc(c.persona || c.concepto) + "</span></span>" +
+        '<span class="reg__monto num">' + fmt(pendienteCobro(c)) + "</span></div>").join("") +
     (abiertas.length > top.length
       ? '<p class="col-vacia">y ' + (abiertas.length - top.length) + " más</p>"
       : "") +
@@ -2835,8 +2852,8 @@ function bloqueDeudas() {
     '<li class="reg"><div class="reg__cuerpo">' +
       '<div class="reg__nombre">' + (i + 1) + ". " + esc(d.nombre) + "</div>" +
       '<div class="reg__meta">Pago ' + fmt(d.pagoMensual || 0, true) +
-        " al mes · " + (d.tasa ? d.tasa + "% anual" : "sin tasa registrada") +
-        (d.abonado ? " · Ya bajaste " + fmt(d.abonado, true) : "") + "</div>" +
+        " al mes · " + (d.tasa ? d.tasa + "% anual" : "sin tasa registrada") + "</div>" +
+      (d.abonado > 0 ? avanceHTML(d.abonado, d.saldo + d.abonado, "Ya bajaste " + fmt(d.abonado, true) + " · falta " + fmt(d.saldo, true)) : "") +
     "</div>" +
     '<span class="reg__monto num">' + fmt(d.saldo, true) + "</span>" +
     '<button class="reg__abonar" type="button" data-abonar-deuda="' + d.id + '" aria-label="Abonar a ' + esc(d.nombre) + '">' +
@@ -4367,8 +4384,47 @@ function etiquetaAmbito() {
    ================================================================ */
 
 /** Total pendiente de cobro, filtrado por ámbito. */
+/**
+ * Saldo que aún falta por cobrar de una cuenta, después de sus abonos.
+ * Las cuentas viejas no traen `abonado`; se toma como cero.
+ * @param {{monto:number, abonado?:number}} c cuenta por cobrar
+ * @returns {number} pendiente, nunca negativo
+ */
+function pendienteCobro(c) {
+  return Math.max(0, Math.round((c.monto - (c.abonado || 0)) * 100) / 100);
+}
+
+/**
+ * Barra de avance con nota, para deudas y cobros con abonos.
+ * @param {number} hecho lo ya pagado
+ * @param {number} total el monto original completo
+ * @param {string} nota texto bajo la barra, ya escapado por quien llama
+ * @returns {string} HTML
+ */
+function avanceHTML(hecho, total, nota) {
+  const p = Math.min(100, Math.round(hecho / (total || 1) * 100));
+  return '<div class="avance" role="img" aria-label="' + p + '% pagado">' +
+      '<div class="avance__relleno" style="width:' + p + '%"></div></div>' +
+    '<span class="avance-nota num">' + nota + "</span>";
+}
+
+/**
+ * Insignia de estado según la fecha en que quedaron de pagar.
+ * @param {?string} fechaPromesa fecha ISO o null/undefined
+ * @returns {string} HTML de la insignia, vacío si no hay fecha
+ */
+function insigniaPromesa(fechaPromesa) {
+  if (!fechaPromesa) return "";
+  const f = aFecha(fechaPromesa);
+  const dias = diasEntre(hoy(), f);
+  if (dias < 0)   return ' <span class="insignia insignia--vencida">Venció el ' + esc(FMT_DIA.format(f)) + "</span>";
+  if (dias === 0) return ' <span class="insignia insignia--pronto">Vence hoy</span>';
+  if (dias <= 7)  return ' <span class="insignia insignia--pronto">Vence en ' + dias + (dias === 1 ? " día" : " días") + "</span>";
+  return ' <span class="insignia insignia--corriente">Para el ' + esc(FMT_DIA.format(f)) + "</span>";
+}
+
 function totalPorCobrar() {
-  return filtrarAmbito(datos.porCobrar.filter(c => !c.cobrado)).reduce((s, c) => s + c.monto, 0);
+  return filtrarAmbito(datos.porCobrar.filter(c => !c.cobrado)).reduce((s, c) => s + pendienteCobro(c), 0);
 }
 
 function bloquePorCobrar() {
@@ -4378,14 +4434,14 @@ function bloquePorCobrar() {
   if (!datos.porCobrar.length) {
     return '<div class="tarjeta"><div class="vacio"><div class="vacio__hoja">' + svg("cobrar", 36) + "</div>" +
       '<p class="vacio__titulo">Nada por cobrar registrado</p>' +
-      '<p class="vacio__texto">Si alguien te debe —un trabajo entregado, dinero que prestaste— anótalo aquí. ' +
-      "No cuenta como ingreso hasta que lo cobras, y así no te engañas con dinero que todavía no llega.</p>" +
+      '<p class="vacio__texto">Si alguien te debe —un trabajo entregado, dinero que prestaste— anótalo aquí ' +
+      "con su nombre. Cada pago que te haga lo registras y ves bajar lo que te debe.</p>" +
       '<button class="btn" type="button" data-abrir="cobrar">Registrar algo por cobrar</button></div></div>';
   }
 
-  const total = pendientes.reduce((s, c) => s + c.monto, 0);
+  const total = pendientes.reduce((s, c) => s + pendienteCobro(c), 0);
   const porTipo = {};
-  pendientes.forEach(c => { porTipo[c.tipo || "Sin clasificar"] = (porTipo[c.tipo || "Sin clasificar"] || 0) + c.monto; });
+  pendientes.forEach(c => { porTipo[c.tipo || "Sin clasificar"] = (porTipo[c.tipo || "Sin clasificar"] || 0) + pendienteCobro(c); });
 
   let html = '<div class="tarjeta"><div class="balance">' +
     '<div class="balance__rotulo">Te deben</div>' +
@@ -4407,24 +4463,42 @@ function bloquePorCobrar() {
   }
   html += "</div>";
 
+  // Primero lo que ya venció, luego lo más próximo a vencer, al final lo que no tiene fecha.
+  const orden = pendientes.slice().sort((a, b) => {
+    if (a.fechaPromesa && b.fechaPromesa) return aFecha(a.fechaPromesa) - aFecha(b.fechaPromesa);
+    if (a.fechaPromesa) return -1;
+    if (b.fechaPromesa) return 1;
+    return (b.creado || 0) - (a.creado || 0);
+  });
+
   html += '<div class="tarjeta"><h2 class="tarjeta__titulo">Pendientes de cobro</h2><ul class="lista">' +
-    pendientes.map(c =>
-      '<li class="reg"><div class="reg__cuerpo">' +
-        '<div class="reg__nombre">' + esc(c.concepto) + "</div>" +
-        '<div class="reg__meta">' + esc(c.tipo || "Sin clasificar") +
-          (c.fecha ? " · " + esc(FMT_DIA.format(aFecha(c.fecha))) : "") + "</div></div>" +
-      '<span class="reg__monto num">' + fmt(c.monto) + "</span>" +
-      '<button class="reg__borrar" type="button" data-borrar-cobro="' + c.id + '" ' +
-        'aria-label="Quitar cuenta por cobrar">' + svg("bote", 18) + "</button></li>" +
-      '<li style="padding:0 0 var(--s-3)"><button class="btn btn--fantasma" type="button" ' +
-        'data-cobrado="' + c.id + '">Ya me lo pagaron</button></li>"'.replace('"', "")
-    ).join("") + "</ul></div>";
+    orden.map(c => {
+      const quien = c.persona || c.concepto;
+      const saldo = pendienteCobro(c);
+      const meta = [
+        c.persona ? esc(c.concepto) : null,
+        esc(c.tipo || "Sin clasificar"),
+        c.fecha ? "desde el " + esc(FMT_DIA.format(aFecha(c.fecha))) : null
+      ].filter(Boolean).join(" · ");
+      return '<li class="reg">' +
+        '<span class="chip-inicial" aria-hidden="true">' + esc(String(quien).trim().charAt(0).toUpperCase() || "?") + "</span>" +
+        '<div class="reg__cuerpo">' +
+          '<div class="reg__nombre">' + esc(quien) + "</div>" +
+          '<div class="reg__meta">' + meta + insigniaPromesa(c.fechaPromesa) + "</div>" +
+          (c.abonado > 0 ? avanceHTML(c.abonado, c.monto, "Ya te pagó " + fmt(c.abonado, true) + " de " + fmt(c.monto, true)) : "") +
+        "</div>" +
+        '<span class="reg__monto num">' + fmt(saldo, true) + "</span>" +
+        '<button class="reg__abonar" type="button" data-abonar-cobro="' + c.id + '" ' +
+          'aria-label="Registrar un pago de ' + esc(quien) + '">' + svg("abono", 18) + "</button>" +
+        '<button class="reg__borrar" type="button" data-borrar-cobro="' + c.id + '" ' +
+          'aria-label="Quitar la cuenta de ' + esc(quien) + '">' + svg("bote", 18) + "</button></li>";
+    }).join("") + "</ul></div>";
 
   if (cobradas.length) {
     html += '<div class="tarjeta"><h2 class="tarjeta__titulo">Cobrado recientemente</h2><ul class="lista">' +
       cobradas.map(c =>
         '<li class="reg"><div class="reg__cuerpo">' +
-          '<div class="reg__nombre">' + esc(c.concepto) + "</div>" +
+          '<div class="reg__nombre">' + esc(c.persona || c.concepto) + "</div>" +
           '<div class="reg__meta">Cobrado el ' + esc(FMT_DIA.format(aFecha(c.fechaCobro))) + "</div></div>" +
         '<span class="reg__monto num ingreso">' + fmt(c.monto) + "</span></li>"
       ).join("") + "</ul></div>";
@@ -4434,17 +4508,23 @@ function bloquePorCobrar() {
   return html;
 }
 
-/** Alta de una cuenta por cobrar. */
+/** Alta de una cuenta por cobrar, con deudor y fecha prometida opcionales. */
 function hojaCobrar() {
   const tipos = [...new Set(datos.porCobrar.map(c => c.tipo).filter(Boolean))];
+  const personas = [...new Set(datos.porCobrar.map(c => c.persona).filter(Boolean))];
   const cuerpo =
     '<form id="form-cobrar" novalidate>' +
       '<div class="campo"><label for="cb-concepto">¿Qué te deben?</label>' +
         '<input class="entrada" id="cb-concepto" type="text" maxlength="60" required ' +
-        'placeholder="Ej. trabajo entregado a Fulano"></div>' +
+        'placeholder="Ej. trabajo entregado, dinero prestado"></div>' +
       '<div class="campo"><label for="cb-monto">¿Cuánto?</label>' +
         '<input class="entrada entrada--monto" id="cb-monto" type="number" inputmode="decimal" ' +
         'min="0.01" step="0.01" required placeholder="0.00"></div>' +
+      '<div class="campo"><label for="cb-persona">¿Quién te debe? (opcional)</label>' +
+        '<input class="entrada" id="cb-persona" type="text" maxlength="40" list="lista-personas" ' +
+        'placeholder="Nombre de la persona o negocio">' +
+        (personas.length ? '<datalist id="lista-personas">' + personas.map(p => "<option>" + esc(p) + "</option>").join("") + "</datalist>" : "") +
+        '<p class="campo__ayuda">Con el nombre puedes registrar sus pagos poco a poco y ver cuánto te falta por cobrar.</p></div>' +
       '<div class="campo"><label for="cb-tipo">Tipo (opcional)</label>' +
         '<input class="entrada" id="cb-tipo" type="text" maxlength="30" list="lista-tipos" ' +
         'placeholder="Ej. servicios, préstamo">' +
@@ -4457,6 +4537,9 @@ function hojaCobrar() {
         : "") +
       '<div class="campo"><label for="cb-fecha">¿Desde cuándo? (opcional)</label>' +
         '<input class="entrada" id="cb-fecha" type="date" max="' + aISO(hoy()) + '"></div>' +
+      '<div class="campo"><label for="cb-promesa">¿Para cuándo quedaron de pagarte? (opcional)</label>' +
+        '<input class="entrada" id="cb-promesa" type="date">' +
+        '<p class="campo__ayuda">Si pones fecha, te aviso cuando esté por vencer o ya se haya pasado.</p></div>' +
       '<p class="campo__error" id="err-cobrar" hidden></p>' +
       '<button class="btn btn--bloque" type="submit">Guardar</button>' +
     "</form>";
@@ -4481,56 +4564,81 @@ function hojaCobrar() {
       }
       datos.porCobrar.push({
         id: id(), concepto, monto: Math.round(monto * 100) / 100,
+        persona: caja.querySelector("#cb-persona").value.trim() || null,
         tipo: caja.querySelector("#cb-tipo").value.trim(),
         ambito: amb, fecha: caja.querySelector("#cb-fecha").value || null,
-        cobrado: false, fechaCobro: null
+        fechaPromesa: caja.querySelector("#cb-promesa").value || null,
+        abonado: 0, cobrado: false, fechaCobro: null, creado: Date.now()
       });
       await persistir(); cerrarHoja(); avisar("Registrado"); pintar();
     });
   });
 }
 
-/** Marca una cuenta como cobrada y genera el ingreso correspondiente. */
-function hojaMarcarCobrado(cobroId) {
+/**
+ * Registra un pago recibido sobre una cuenta por cobrar, desde el panel
+ * lateral — la lista queda visible detrás, igual que el abono a deudas.
+ * Espejo de panelAbonoDeuda: aquí el dinero entra en vez de salir.
+ * @param {string} cobroId id de la cuenta en datos.porCobrar
+ */
+function panelAbonoCobro(cobroId) {
   const c = datos.porCobrar.find(x => x.id === cobroId);
-  if (!c) return;
+  if (!c || c.cobrado) return;
+  const saldo = pendienteCobro(c);
+  const quien = c.persona || c.concepto;
   const cuerpo =
-    '<form id="form-cobro" novalidate>' +
+    '<form id="form-abono-cobro" novalidate>' +
       '<p style="margin:0 0 var(--s-4);font-size:15px;color:var(--tinta-suave)">' +
-        esc(c.concepto) + " — " + fmt(c.monto) + "</p>" +
-      '<div class="campo"><label for="co-monto">¿Cuánto te pagaron?</label>' +
-        '<input class="entrada entrada--monto" id="co-monto" type="number" inputmode="decimal" ' +
-        'min="0.01" step="0.01" value="' + c.monto + '" required></div>' +
-      '<div class="campo"><label for="co-fecha">¿Cuándo?</label>' +
-        '<input class="entrada" id="co-fecha" type="date" value="' + aISO(hoy()) + '" max="' + aISO(hoy()) + '"></div>' +
-      '<div class="nota">' + svg("info", 18) +
-        "<div>Se va a registrar como ingreso de ese día, así aparece en tu resumen y en tus reportes.</div></div>" +
-      '<button class="btn btn--bloque" type="submit" style="margin-top:var(--s-4)">Confirmar cobro</button>' +
+        'Te debe <strong class="num" style="color:var(--tinta)">' + fmt(saldo) + "</strong>" +
+        (c.abonado ? ". Ya te ha pagado " + fmt(c.abonado, true) + " de " + fmt(c.monto, true) + "." : ".") + "</p>" +
+      '<div class="campo"><label for="ac-monto">¿Cuánto te pagó?</label>' +
+        '<input class="entrada entrada--monto" id="ac-monto" type="number" inputmode="decimal" ' +
+          'min="0.01" step="0.01" required placeholder="0.00"></div>' +
+      '<button class="btn btn--fantasma btn--bloque" type="button" id="ac-todo" style="margin-bottom:var(--s-4)">' +
+        "Me pagó todo (" + fmt(saldo, true) + ")</button>" +
+      '<div class="campo"><label for="ac-fecha">¿Cuándo?</label>' +
+        '<input class="entrada" id="ac-fecha" type="date" value="' + aISO(hoy()) + '" max="' + aISO(hoy()) + '"></div>' +
+      '<div class="campo"><label style="display:flex;align-items:center;gap:var(--s-2);font-size:15px">' +
+        '<input type="checkbox" id="ac-ingreso" checked> Registrarlo también como ingreso</label>' +
+        '<p class="campo__ayuda">Así el cobro aparece en tu resumen y tus reportes. Desmárcalo solo si ya lo capturaste en tus movimientos.</p></div>' +
+      '<p class="campo__error" id="err-abono-cobro" hidden></p>' +
+      '<button class="btn btn--bloque" type="submit">Registrar pago</button>' +
     "</form>";
 
-  abrirHoja("Registrar el cobro", cuerpo, caja => {
-    caja.querySelector("#form-cobro").addEventListener("submit", async e => {
+  abrirPanel("Pago de " + quien, cuerpo, caja => {
+    caja.querySelector("#ac-todo").addEventListener("click", () => {
+      const m = caja.querySelector("#ac-monto");
+      m.value = saldo; m.focus();
+    });
+    caja.querySelector("#form-abono-cobro").addEventListener("submit", async e => {
       e.preventDefault();
-      const monto = parseFloat(caja.querySelector("#co-monto").value);
-      if (!Number.isFinite(monto) || monto <= 0) return;
-      const fecha = caja.querySelector("#co-fecha").value || aISO(hoy());
-
-      datos.movimientos.push({
-        id: id(), tipo: "ingreso", monto: Math.round(monto * 100) / 100,
-        categoria: c.ambito === "negocio" ? "negocio" : "otro_in",
-        fecha, metodo: "Transferencia", nota: c.concepto,
-        ambito: c.ambito || "personal", creado: Date.now()
-      });
-      c.cobrado = true; c.fechaCobro = fecha;
-      // Si te pagaron menos de lo pactado, el resto sigue pendiente.
-      if (monto < c.monto) {
-        datos.porCobrar.push({
-          id: id(), concepto: c.concepto + " (saldo)", monto: Math.round((c.monto - monto) * 100) / 100,
-          tipo: c.tipo, ambito: c.ambito, fecha: c.fecha, cobrado: false, fechaCobro: null
+      const monto = parseFloat(caja.querySelector("#ac-monto").value);
+      const err = caja.querySelector("#err-abono-cobro");
+      if (!Number.isFinite(monto) || monto <= 0) {
+        err.hidden = false;
+        err.innerHTML = svg("alerta", 15) + "<span>Escribe cuánto te pagó.</span>";
+        return;
+      }
+      if (monto > saldo + 0.005) {
+        err.hidden = false;
+        err.innerHTML = svg("alerta", 15) + "<span>Te debe " + fmt(saldo, true) +
+          "; el pago no puede ser mayor. Si te pagó de más, registra la diferencia como ingreso aparte.</span>";
+        return;
+      }
+      const fecha = caja.querySelector("#ac-fecha").value || aISO(hoy());
+      if (caja.querySelector("#ac-ingreso").checked) {
+        datos.movimientos.push({
+          id: id(), tipo: "ingreso", monto: Math.round(monto * 100) / 100,
+          categoria: c.ambito === "negocio" ? "negocio" : "otro_in",
+          fecha, metodo: "", nota: "Pago de " + quien,
+          ambito: c.ambito || "personal", creado: Date.now()
         });
       }
-      await persistir(); cerrarHoja();
-      avisar(monto < c.monto ? "Cobro parcial registrado" : "Cobro registrado");
+      c.abonado = Math.round(((c.abonado || 0) + monto) * 100) / 100;
+      const liquidado = pendienteCobro(c) <= 0;
+      if (liquidado) { c.cobrado = true; c.fechaCobro = fecha; }
+      await persistir(); cerrarPanel();
+      avisar(liquidado ? "¡Te pagaron completo! Cuenta saldada." : "Pago registrado. Te deben " + fmt(pendienteCobro(c), true));
       pintar();
     });
   });
@@ -5579,15 +5687,15 @@ document.addEventListener("click", async e => {
   const bal = t.closest("[data-balance]");
   if (bal) { datos.pestanaBalance = bal.dataset.balance; await persistir(); pintar(); return; }
 
-  const cob = t.closest("[data-cobrado]");
-  if (cob) { hojaMarcarCobrado(cob.dataset.cobrado); return; }
+  const abonoCobro = t.closest("[data-abonar-cobro]");
+  if (abonoCobro) { panelAbonoCobro(abonoCobro.dataset.abonarCobro); return; }
 
   const bcob = t.closest("[data-borrar-cobro]");
   if (bcob) {
     const c = datos.porCobrar.find(x => x.id === bcob.dataset.borrarCobro);
     if (!c) return;
     confirmar("Quitar cuenta por cobrar",
-      'Se eliminará "' + c.concepto + '" por ' + fmt(c.monto) + ". No se puede deshacer.",
+      'Se eliminará "' + (c.persona || c.concepto) + '" con ' + fmt(pendienteCobro(c)) + " pendientes. No se puede deshacer.",
       "Sí, quitar",
       async () => {
         datos.porCobrar = datos.porCobrar.filter(x => x.id !== c.id);
