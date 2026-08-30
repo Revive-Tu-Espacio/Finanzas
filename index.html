@@ -4470,7 +4470,7 @@ let cobrosAbiertos = new Set();
 function filaCobro(c) {
   const quien = c.persona || c.concepto;
   const saldo = pendienteCobro(c);
-  const sinClasificar = !c.persona && !c.tipo;
+  const sinClasificar = !c.persona && !c.tipo && !c.carpeta;
   const meta = [
     c.persona ? esc(c.concepto) : null,
     esc(c.tipo || "Sin clasificar"),
@@ -4541,7 +4541,7 @@ function bloquePorCobrar() {
   // cerradas muestran subtotal y conteo; un toque las abre.
   const grupos = new Map();
   orden.forEach(c => {
-    const k = c.persona || c.tipo || "Sin clasificar";
+    const k = c.carpeta || c.persona || c.tipo || "Sin clasificar";
     if (!grupos.has(k)) grupos.set(k, []);
     grupos.get(k).push(c);
   });
@@ -4597,6 +4597,7 @@ function hojaEditarCobro(cobroId) {
   if (!c || c.cobrado) return;
   const tipos = [...new Set(datos.porCobrar.map(x => x.tipo).filter(Boolean))];
   const personas = [...new Set(datos.porCobrar.map(x => x.persona).filter(Boolean))];
+  const carpetas = [...new Set(datos.porCobrar.map(x => x.carpeta).filter(Boolean))];
   const cuerpo =
     '<form id="form-editar-cobro" novalidate>' +
       '<p style="margin:0 0 var(--s-4);font-size:15px;color:var(--tinta-suave)">' +
@@ -4613,6 +4614,11 @@ function hojaEditarCobro(cobroId) {
         'placeholder="Ej. servicios, préstamo" value="' + esc(c.tipo || "") + '">' +
         (tipos.length ? '<datalist id="lista-tipos-e">' + tipos.map(t => "<option>" + esc(t) + "</option>").join("") + "</datalist>" : "") +
         '<p class="campo__ayuda">Con nombre o tipo, la cuenta se acomoda en su carpeta.</p></div>' +
+      '<div class="campo"><label for="ec-carpeta">Carpeta (opcional)</label>' +
+        '<input class="entrada" id="ec-carpeta" type="text" maxlength="40" list="lista-carpetas-e" ' +
+        'placeholder="Ej. Notaría, Familia" value="' + esc(c.carpeta || "") + '">' +
+        (carpetas.length ? '<datalist id="lista-carpetas-e">' + carpetas.map(k => "<option>" + esc(k) + "</option>").join("") + "</datalist>" : "") +
+        '<p class="campo__ayuda">Escribe un nombre nuevo y la carpeta se crea sola. Manda sobre persona y tipo al agrupar.</p></div>' +
       '<div class="campo"><label for="ec-promesa">¿Para cuándo quedaron de pagarte? (opcional)</label>' +
         '<input class="entrada" id="ec-promesa" type="date" value="' + esc(c.fechaPromesa || "") + '"></div>' +
       '<p class="campo__error" id="err-editar-cobro" hidden></p>' +
@@ -4632,9 +4638,10 @@ function hojaEditarCobro(cobroId) {
       c.concepto = concepto;
       c.persona = caja.querySelector("#ec-persona").value.trim() || null;
       c.tipo = caja.querySelector("#ec-tipo").value.trim();
+      c.carpeta = caja.querySelector("#ec-carpeta").value.trim() || null;
       c.fechaPromesa = caja.querySelector("#ec-promesa").value || null;
       // Abrir la carpeta destino: que se vea a dónde se fue.
-      cobrosAbiertos.add(c.persona || c.tipo || "Sin clasificar");
+      cobrosAbiertos.add(c.carpeta || c.persona || c.tipo || "Sin clasificar");
       await persistir(); cerrarHoja(); avisar("Cuenta actualizada"); pintar();
     });
   });
@@ -4644,6 +4651,7 @@ function hojaEditarCobro(cobroId) {
 function hojaCobrar() {
   const tipos = [...new Set(datos.porCobrar.map(c => c.tipo).filter(Boolean))];
   const personas = [...new Set(datos.porCobrar.map(c => c.persona).filter(Boolean))];
+  const carpetas = [...new Set(datos.porCobrar.map(c => c.carpeta).filter(Boolean))];
   const cuerpo =
     '<form id="form-cobrar" novalidate>' +
       '<div class="campo"><label for="cb-concepto">¿Qué te deben?</label>' +
@@ -4667,6 +4675,11 @@ function hojaCobrar() {
           '<button type="button" data-amb="personal" aria-pressed="true">Personal</button>' +
           '<button type="button" data-amb="negocio" aria-pressed="false">Negocio</button></div></div>'
         : "") +
+      '<div class="campo"><label for="cb-carpeta">Carpeta (opcional)</label>' +
+        '<input class="entrada" id="cb-carpeta" type="text" maxlength="40" list="lista-carpetas" ' +
+        'placeholder="Ej. Notaría, Familia">' +
+        (carpetas.length ? '<datalist id="lista-carpetas">' + carpetas.map(k => "<option>" + esc(k) + "</option>").join("") + "</datalist>" : "") +
+        '<p class="campo__ayuda">Escribe un nombre nuevo y la carpeta se crea sola. Manda sobre persona y tipo al agrupar.</p></div>' +
       '<div class="campo"><label for="cb-fecha">¿Desde cuándo? (opcional)</label>' +
         '<input class="entrada" id="cb-fecha" type="date" max="' + aISO(hoy()) + '"></div>' +
       '<div class="campo"><label for="cb-promesa">¿Para cuándo quedaron de pagarte? (opcional)</label>' +
@@ -4698,6 +4711,7 @@ function hojaCobrar() {
         id: id(), concepto, monto: Math.round(monto * 100) / 100,
         persona: caja.querySelector("#cb-persona").value.trim() || null,
         tipo: caja.querySelector("#cb-tipo").value.trim(),
+        carpeta: caja.querySelector("#cb-carpeta").value.trim() || null,
         ambito: amb, fecha: caja.querySelector("#cb-fecha").value || null,
         fechaPromesa: caja.querySelector("#cb-promesa").value || null,
         abonado: 0, cobrado: false, fechaCobro: null, creado: Date.now()
