@@ -200,6 +200,8 @@ p{text-wrap:pretty}
 }
 .carpeta__meta{display:block;font-size:12px;font-weight:400;color:var(--tinta-suave);margin-top:1px}
 .carpeta__monto{flex:none;font-size:15px;font-weight:600;white-space:nowrap}
+.reg__cuerpo--tocable{cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:rgba(68,92,56,.12)}
+
 .carpeta-hijos{
   list-style:none;margin:0 0 0 var(--s-2);padding:0 0 0 var(--s-3);
   border-left:2px solid var(--verde-claro);
@@ -4468,14 +4470,17 @@ let cobrosAbiertos = new Set();
 function filaCobro(c) {
   const quien = c.persona || c.concepto;
   const saldo = pendienteCobro(c);
+  const sinClasificar = !c.persona && !c.tipo;
   const meta = [
     c.persona ? esc(c.concepto) : null,
     esc(c.tipo || "Sin clasificar"),
     c.fecha ? "desde el " + esc(FMT_DIA.format(aFecha(c.fecha))) : null
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(" · ") +
+    (sinClasificar ? ' <span class="insignia insignia--corriente">Clasificar</span>' : "");
   return '<li class="reg">' +
     '<span class="chip-inicial" aria-hidden="true">' + esc(String(quien).trim().charAt(0).toUpperCase() || "?") + "</span>" +
-    '<div class="reg__cuerpo">' +
+    '<div class="reg__cuerpo reg__cuerpo--tocable" data-editar-cobro="' + c.id + '" ' +
+      'title="Toca para clasificar o editar">' +
       '<div class="reg__nombre">' + esc(quien) + "</div>" +
       '<div class="reg__meta">' + meta + insigniaPromesa(c.fechaPromesa) + "</div>" +
       (c.abonado > 0 ? avanceHTML(c.abonado, c.monto, "Ya te pagó " + fmt(c.abonado, true) + " de " + fmt(c.monto, true)) : "") +
@@ -4578,6 +4583,61 @@ function bloquePorCobrar() {
 
   html += '<button class="btn btn--fantasma btn--bloque" type="button" data-abrir="cobrar">Agregar otra cuenta por cobrar</button>';
   return html;
+}
+
+/**
+ * Edita la clasificación de una cuenta por cobrar: concepto, persona,
+ * tipo y fecha prometida. Al guardar, la carpeta donde aterrizó queda
+ * abierta para que se vea a dónde se fue. No toca el monto ni los
+ * abonos: eso es contabilidad, no clasificación.
+ * @param {string} cobroId id de la cuenta en datos.porCobrar
+ */
+function hojaEditarCobro(cobroId) {
+  const c = datos.porCobrar.find(x => x.id === cobroId);
+  if (!c || c.cobrado) return;
+  const tipos = [...new Set(datos.porCobrar.map(x => x.tipo).filter(Boolean))];
+  const personas = [...new Set(datos.porCobrar.map(x => x.persona).filter(Boolean))];
+  const cuerpo =
+    '<form id="form-editar-cobro" novalidate>' +
+      '<p style="margin:0 0 var(--s-4);font-size:15px;color:var(--tinta-suave)">' +
+        'Pendiente: <strong class="num" style="color:var(--tinta)">' + fmt(pendienteCobro(c)) + "</strong></p>" +
+      '<div class="campo"><label for="ec-concepto">¿Qué te deben?</label>' +
+        '<input class="entrada" id="ec-concepto" type="text" maxlength="60" required ' +
+        'value="' + esc(c.concepto) + '"></div>' +
+      '<div class="campo"><label for="ec-persona">¿Quién te debe? (opcional)</label>' +
+        '<input class="entrada" id="ec-persona" type="text" maxlength="40" list="lista-personas-e" ' +
+        'placeholder="Nombre de la persona o negocio" value="' + esc(c.persona || "") + '">' +
+        (personas.length ? '<datalist id="lista-personas-e">' + personas.map(p => "<option>" + esc(p) + "</option>").join("") + "</datalist>" : "") + "</div>" +
+      '<div class="campo"><label for="ec-tipo">Tipo (opcional)</label>' +
+        '<input class="entrada" id="ec-tipo" type="text" maxlength="30" list="lista-tipos-e" ' +
+        'placeholder="Ej. servicios, préstamo" value="' + esc(c.tipo || "") + '">' +
+        (tipos.length ? '<datalist id="lista-tipos-e">' + tipos.map(t => "<option>" + esc(t) + "</option>").join("") + "</datalist>" : "") +
+        '<p class="campo__ayuda">Con nombre o tipo, la cuenta se acomoda en su carpeta.</p></div>' +
+      '<div class="campo"><label for="ec-promesa">¿Para cuándo quedaron de pagarte? (opcional)</label>' +
+        '<input class="entrada" id="ec-promesa" type="date" value="' + esc(c.fechaPromesa || "") + '"></div>' +
+      '<p class="campo__error" id="err-editar-cobro" hidden></p>' +
+      '<button class="btn btn--bloque" type="submit">Guardar cambios</button>' +
+    "</form>";
+
+  abrirHoja("Clasificar la cuenta", cuerpo, caja => {
+    caja.querySelector("#form-editar-cobro").addEventListener("submit", async e => {
+      e.preventDefault();
+      const concepto = caja.querySelector("#ec-concepto").value.trim();
+      const err = caja.querySelector("#err-editar-cobro");
+      if (!concepto) {
+        err.hidden = false;
+        err.innerHTML = svg("alerta", 15) + "<span>El concepto no puede quedar vacío.</span>";
+        return;
+      }
+      c.concepto = concepto;
+      c.persona = caja.querySelector("#ec-persona").value.trim() || null;
+      c.tipo = caja.querySelector("#ec-tipo").value.trim();
+      c.fechaPromesa = caja.querySelector("#ec-promesa").value || null;
+      // Abrir la carpeta destino: que se vea a dónde se fue.
+      cobrosAbiertos.add(c.persona || c.tipo || "Sin clasificar");
+      await persistir(); cerrarHoja(); avisar("Cuenta actualizada"); pintar();
+    });
+  });
 }
 
 /** Alta de una cuenta por cobrar, con deudor y fecha prometida opcionales. */
@@ -5761,6 +5821,9 @@ document.addEventListener("click", async e => {
 
   const abonoCobro = t.closest("[data-abonar-cobro]");
   if (abonoCobro) { panelAbonoCobro(abonoCobro.dataset.abonarCobro); return; }
+
+  const editarCobro = t.closest("[data-editar-cobro]");
+  if (editarCobro) { hojaEditarCobro(editarCobro.dataset.editarCobro); return; }
 
   const carpeta = t.closest("[data-carpeta]");
   if (carpeta) {
